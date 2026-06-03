@@ -1,0 +1,25 @@
+{
+  "name": "driftloop",
+  "short_name": "driftloop",
+  "description": "Generative lofi / ambient / jazz / classical, synthesised live in your browser. Offline-capable.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1318",
+  "theme_color": "#0f1318",
+  "icons": [
+    {
+      "src": "public/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "public/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

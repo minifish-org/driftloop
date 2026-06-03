@@ -56,15 +56,71 @@ browser CORS reasons.
 
 ## Deploying
 
-Drop everything onto any static host — GitHub Pages, Netlify, Cloudflare
-Pages, your own server. No backend, no environment variables, no secrets.
-The SoundFont is the largest single asset (~32 MB); let your host's CDN
-cache it.
+driftloop ships as a static site — no backend, no env vars, no secrets.
+The intended target is **Cloudflare Pages**; any other static host works
+too. Cloudflare Pages caps single files at 25 MiB, which is smaller than
+the 32 MB GeneralUser-GS SoundFont — so the SoundFont is not part of
+this deploy at all. The app fetches it on first launch from the
+maintainer's public GitHub mirror at
+`https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2`
+(which sends `Access-Control-Allow-Origin: *`, so cross-origin fetch
+just works). The service worker caches the response on first hit, so
+every subsequent visit is fully offline.
+
+All in-app asset paths are relative, so deploying to a sub-path or a
+custom domain works without changes. The service worker scope is
+restricted to wherever `sw.js` is served from.
+
+### Cloudflare Pages quick-start
+
+Connect this repo via the Cloudflare dashboard:
+
+1. Push the project to GitHub / GitLab.
+2. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect
+   to Git → pick the repo.
+3. Build settings: **Framework preset = None**, **Build command = (empty)**,
+   **Build output directory = `/`**. driftloop has no build step.
+4. Deploy. Site appears at `<project>.pages.dev` within ~30 s.
+
+Or from a clone using Wrangler:
+
+```bash
+npx wrangler pages deploy . --project-name=driftloop
+```
+
+The first visit downloads ~32 MB SoundFont (from its external origin) +
+~1 MB of FluidSynth WASM (from unpkg). The service worker caches both,
+so subsequent visits work fully offline.
+
+## Installing as an app
+
+driftloop is a PWA. On mobile Safari / Chrome / Edge, "Add to Home Screen"
+gives you a standalone-window install with its own icon and no browser
+chrome. Once installed, it runs entirely from the cache — no network
+needed except for the optional MelodyRNN lead (which lazy-loads
+Magenta.js + a ~5 MB checkpoint the first time you toggle it on, and
+caches them).
+
+### iOS Safari quirks worth knowing about
+
+- **Silent switch**: WebAudio on iOS is routed through the *ambient*
+  audio session, which gets muted by the physical silent switch. There's
+  no public API to override this from the browser. If you want sound,
+  flip the switch up.
+- **Screen lock**: when the screen locks, iOS pauses background audio
+  from web pages. Use the Wake Lock API (we request it on Play) to keep
+  the screen on — but iOS Safari doesn't implement Wake Lock yet (as of
+  iOS 17), so on iPhone the screen will sleep and audio will pause.
+  Workaround for now: keep the tab open and the screen unlocked.
+- **Backgrounding**: if you switch tabs / apps, the AudioContext
+  suspends. When you come back, the app resumes it automatically via
+  `visibilitychange`, and the scheduler skips forward rather than
+  flooding the synth with stale bars.
 
 ## Project status
 
-Bootstrapped. See [CLAUDE.md](CLAUDE.md) for the milestone breakdown and
-the agent-facing project context.
+M1–M4 complete. See [CLAUDE.md](CLAUDE.md) for the milestone breakdown
+and the agent-facing project context.
 
 ## License
 

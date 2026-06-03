@@ -24,3 +24,7 @@ npm-debug.log*
 # Local server / test artifacts
 .tmp/
 .scratch/
+
+# Per-user Claude Code permission allowlist; shared settings/launch.json
+# stay in version control.
+.claude/settings.local.json

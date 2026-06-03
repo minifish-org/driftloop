@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>driftloop — generative music</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1318">
+<meta name="description" content="Generative lofi / ambient / jazz / classical, synthesised live in your browser. Offline-capable.">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="public/icons/icon.svg">
+<link rel="apple-touch-icon" href="public/icons/icon.svg">
+
+<!-- iOS standalone app -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="driftloop">
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1d1d1f;
+    --muted: #6b6b6b;
+    --bg: #fafafa;
+    --card: #ffffff;
+    --border: #d8d8d8;
+    --accent: #2a6df4;
+    --accent-fg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #f2f2f2;
+      --muted: #9a9a9a;
+      --bg: #131313;
+      --card: #1d1d1d;
+      --border: #303030;
+      --accent: #6a9bff;
+      --accent-fg: #0c1320;
+    }
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    max-width: 600px;
+    margin: 64px auto;
+    padding: 24px;
+    line-height: 1.5;
+  }
+  h1 { font-weight: 500; font-size: 24px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 32px; }
+  .genres {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 24px 0;
+  }
+  .transport { display: flex; gap: 12px; margin: 20px 0; }
+  button {
+    font-size: 15px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--fg);
+    cursor: pointer;
+    border-radius: 8px;
+    font-family: inherit;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .genre.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 500;
+  }
+  #play { font-weight: 500; }
+  #status {
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    min-height: 1.5em;
+  }
+  footer {
+    margin-top: 48px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+
+<h1>driftloop</h1>
+<p class="subtitle">Generative music, synthesised live in your browser.</p>
+
+<div class="genres" id="genres">
+  <button class="genre" data-genre="lofi">lofi</button>
+  <button class="genre" data-genre="ambient">ambient</button>
+  <button class="genre" data-genre="jazz">jazz</button>
+  <button class="genre" data-genre="classical">classical</button>
+</div>
+
+<div class="transport">
+  <button id="play">Play</button>
+  <button id="stop" disabled>Stop</button>
+  <button id="next">Next</button>
+  <button id="lead">Lead: off</button>
+</div>
+
+<div id="status">Booting…</div>
+
+<footer>
+  Synthesis: js-synthesizer (FluidSynth WASM) + GeneralUser-GS SoundFont.
+  Composition: vanilla JS rules per genre — chord libraries, voicings,
+  walking bass, swing drums, arpeggios, pads. No prerecorded audio. No
+  server. See <a href="README.md">README</a>.
+</footer>
+
+<!-- js-synthesizer ships as UMD globals. Order matters: the WASM loader
+     must run before the JS wrapper. -->
+<script src="https://unpkg.com/js-synthesizer@1.8.5/externals/libfluidsynth-2.3.0-with-libsndfile.js"></script>
+<script src="https://unpkg.com/js-synthesizer@1.8.5/dist/js-synthesizer.js"></script>
+
+<script type="module" src="src/ui/app.js"></script>
+
+</body>
+</html>

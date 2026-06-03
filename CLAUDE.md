@@ -107,7 +107,11 @@ wiring `src/synth/fluid.js`.
 - PWA: manifest, service worker, icon, installable.
 - iOS Safari quirks: audio session, autoplay gesture, background resume,
   silent-switch behaviour.
-- Deploy to GitHub Pages.
+- Deploy to Cloudflare Pages. Note: CF Pages caps single files at
+  25 MiB, so the 32 MB GeneralUser-GS SoundFont can't ship inside the
+  bundle — it has to come from somewhere else (e.g. a jsdelivr mirror
+  of the asset on GitHub, or Cloudflare R2). The decision on which path
+  to take lives next to the implementation, not in this milestone doc.
 - **Acceptance**: open URL on phone, click Play, 30+ minutes without
   glitches.
 
