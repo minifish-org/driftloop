@@ -1,6 +1,14 @@
-// Classical composer. A Bach-prelude-style sixteenth-note arpeggio on
-// acoustic piano, with a string-ensemble pad sustaining the harmony
-// underneath. No drums. Functional triadic harmony, mostly major keys.
+// Classical composer. Music-box arpeggios over a soft harp pad. No drums.
+// Functional triadic harmony, mostly major keys.
+//
+// The journey here: started as Acoustic Grand + String Ensemble, then
+// Acoustic Grand + New Age Pad after the strings sounded thin in
+// MS Gen Lite, then Harpsichord + Harp going for Baroque solo keyboard.
+// None of those quite landed. Now: Music Box + Harp. The aesthetic
+// shifts from "Bach prelude" to "lullaby / music box" — which is a
+// different genre identity from what "classical" literally implies, but
+// it's the option where every voice is a simple plucked/pitched
+// percussion sample that MS Gen Lite renders cleanly.
 
 import { buildChord, intoRange } from '../theory.js';
 import { ProgressionCursor } from '../progression.js';
@@ -23,10 +31,10 @@ const PROGRESSIONS = [
 ];
 
 const CH_PIANO   = 0;
-const CH_STRINGS = 1;
+const CH_PAD = 1;
 
-const PROG_PIANO   = 0;  // Acoustic Grand Piano
-const PROG_STRINGS = 48; // String Ensemble 1
+const PROG_PIANO = 10;  // Music Box — bright pitched percussion, fairy-tale tone
+const PROG_PAD   = 46;  // Orchestral Harp — plucked sustain behind the music box
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -53,8 +61,8 @@ const ARP_PATTERNS = [
   [0, 1, 2, 3, 0, 1, 2, 3],  // straight ascending repeat
 ];
 
-// Strings: triadic sustain held for the full bar, mid-register.
-function stringsBar(chord) {
+// Pad: triadic sustain held for the full bar, mid-register.
+function padBar(chord) {
   const ints = buildChord(0, chord.quality);
   const r = intoRange(chord.rootPc + 60, 60, 72);   // C4..C5
   const t = intoRange(chord.rootPc + 60 + ints[1], 60, 75);
@@ -82,8 +90,8 @@ export class ClassicalComposer {
 
   getSetup() {
     return [
-      { channel: CH_PIANO,   program: PROG_PIANO   },
-      { channel: CH_STRINGS, program: PROG_STRINGS },
+      { channel: CH_PIANO, program: PROG_PIANO },
+      { channel: CH_PAD,   program: PROG_PAD   },
     ];
   }
 
@@ -109,10 +117,10 @@ export class ClassicalComposer {
       });
     }
 
-    // Strings: sustained triad for the full bar (4 beats), very soft.
-    for (const note of stringsBar(chord)) {
+    // Pad: sustained triad for the full bar (4 beats), very soft.
+    for (const note of padBar(chord)) {
       events.push({
-        channel: CH_STRINGS,
+        channel: CH_PAD,
         note,
         velocity: 48,
         time: 0,
