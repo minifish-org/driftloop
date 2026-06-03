@@ -31,7 +31,11 @@ const CH_DRUM  = 9;
 
 const PROG_PIANO = 0;   // Acoustic Grand Piano
 const PROG_BASS  = 32;  // Acoustic Bass (upright)
-const PROG_LEAD  = 66;  // Tenor Sax
+const PROG_LEAD  = 11;  // Vibraphone — Milt Jackson / Modern Jazz Quartet
+                        // territory. Chosen after A/B against EP, Trumpet,
+                        // Alto Sax, and Drawbar Organ — Vibes was the only
+                        // option that didn't sound like a poor sample of
+                        // a solo wind / brass voice in MS Gen Lite.
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -188,13 +192,17 @@ export class JazzComposer {
 
     // Lead (optional)
     if (this.lead) {
+      // Vibraphone's broader sweet spot — it reaches lower than the
+      // lofi range thanks to its sustained mallet attack, and still
+      // sings nicely up to A5.
       const ctx = buildChordContext(chord);
+      ctx.leadRange = [55, 81];
       const leadNotes = this.lead.barNotes(ctx, this.cursor.barInProg);
       for (const n of leadNotes) {
         events.push({
           channel: CH_LEAD,
           note: n.pitch,
-          velocity: n.velocity ?? 82,
+          velocity: n.velocity ?? 65,
           time: n.time,
           duration: n.duration,
         });

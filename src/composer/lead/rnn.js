@@ -161,20 +161,22 @@ export class RnnLead {
           const startBeats = (n.quantizedStartStep - barStart) / 4;
           const endStep = Math.min(n.quantizedEndStep ?? (n.quantizedStartStep + 2), barEnd);
           const dur = Math.max(0.25, (endStep - n.quantizedStartStep) / 4);
-          return { pitch: n.pitch, time: startBeats, duration: dur, velocity: 82 };
+          return { pitch: n.pitch, time: startBeats, duration: dur, velocity: 65 };
         });
       bars.push(barNotes);
     }
     this.cache = bars;
   }
 
-  // ctx: { chord, scale, chordTones } — accepted for backwards compatibility
-  // with the leadContext shape, but only `range` is used here. ImprovRNN
-  // outputs in-key by construction; we just clamp to the lead's register.
-  barNotes(_ctx, barIdx) {
+  // ctx: { chord, scale, chordTones, leadRange? }. ImprovRNN outputs in-key
+  // by construction; here we just clamp to the lead's register. If the
+  // composer supplies its own leadRange via ctx (sax wants a narrower
+  // upper bound than flute, for example), use that instead of the
+  // default the RnnLead was constructed with.
+  barNotes(ctx, barIdx) {
     if (!this.cache || barIdx >= this.cache.length) return [];
     const bar = this.cache[barIdx];
-    const [lo, hi] = this.range;
+    const [lo, hi] = (ctx && ctx.leadRange) || this.range;
     const clamped = bar.map(n => {
       let p = n.pitch;
       while (p < lo) p += 12;

@@ -1,8 +1,8 @@
 // Lofi composer. Generates bars of MIDI events on three channels:
-//   0  Rhodes / Electric Piano  — block-voiced chord on the downbeat (& 3)
-//   1  Electric Bass            — root on 1, optionally 5th on 3
-//   2  Flute (optional lead)    — only used when a lead provider is attached
-//   9  Drum kit                 — boom-bap pattern from the rhythm library
+//   0  Rhodes / Electric Piano   — block-voiced chord on the downbeat (& 3)
+//   1  Electric Bass             — root on 1, optionally 5th on 3
+//   2  Vibraphone (optional lead) — only used when a lead provider is attached
+//   9  Drum kit                  — boom-bap pattern from the rhythm library
 //
 // Composition strategy: pick a 4-bar progression with random transposition,
 // loop it 2–3 times, then maybe rotate. Drum pattern is fixed within a
@@ -41,7 +41,10 @@ const CH_DRUM  = 9;
 // GM programs.
 const PROG_PIANO = 4;   // Electric Piano 1 (Rhodes-ish)
 const PROG_BASS  = 33;  // Electric Bass (finger)
-const PROG_LEAD  = 73;  // Flute — gentle single-line voice over the chords
+const PROG_LEAD  = 11;  // Vibraphone — mallet attack + natural sustain, sits
+                        // beautifully over the chord stabs. Chosen after A/B
+                        // listening against EP, Marimba, Tubular Bells, and
+                        // Pan Flute.
 
 // 8th-note swing depth. ~0.09 of a beat lands the "and" of each beat just
 // noticeably late — classic lofi shuffle, not full triplet feel.
@@ -184,13 +187,16 @@ export class LofiComposer {
 
     // --- lead (optional) ---
     if (this.lead) {
+      // Vibraphone's bright/clear sweet spot: C4..A5. Going above A5 the
+      // bars start to chime more than they sing.
       const ctx = buildChordContext(chord);
+      ctx.leadRange = [60, 81];
       const leadNotes = this.lead.barNotes(ctx, this.cursor.barInProg);
       for (const n of leadNotes) {
         events.push({
           channel: CH_LEAD,
           note: n.pitch,
-          velocity: n.velocity ?? 82,
+          velocity: n.velocity ?? 65,
           time: n.time,
           duration: n.duration,
         });

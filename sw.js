@@ -7,7 +7,7 @@
 // handler — they're large and the user may never opt into RNN, so it's
 // not worth precaching them.
 
-const CACHE = 'driftloop-v12';
+const CACHE = 'driftloop-v16';
 
 const SHELL = [
   './',
