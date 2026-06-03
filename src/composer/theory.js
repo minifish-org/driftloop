@@ -63,6 +63,15 @@ export function parseChord(symbol) {
   return { rootPc, quality: q };
 }
 
+// Transpose a chord by `semitones` (positive = up). Pure: returns a new
+// chord object. Used by composers when modulating between progression cycles.
+export function transposeChord(chord, semitones) {
+  return {
+    rootPc: (((chord.rootPc + semitones) % 12) + 12) % 12,
+    quality: chord.quality,
+  };
+}
+
 // Build a chord at a given root midi note, return ascending midi pitches.
 export function buildChord(rootMidi, quality) {
   const ints = CHORDS[quality];
@@ -86,6 +95,21 @@ const QUALITY_SCALE = {
 export function chordScale({ rootPc, quality }) {
   const ints = QUALITY_SCALE[quality] || SCALE_MAJOR;
   return ints.map(i => (rootPc + i) % 12);
+}
+
+// Two-stage snap used by the lead's grammar guard: prefer a chord tone
+// within ±1 semitone (so a chromatic neighbour of the 3rd snaps to the 3rd
+// instead of getting pulled to a faraway scale tone), then fall back to
+// the broader chord scale.
+export function snapToChordOrScale(midiNote, chordPcs, scalePcs) {
+  const pc = ((midiNote % 12) + 12) % 12;
+  if (chordPcs.includes(pc)) return midiNote;
+  for (const d of [1, -1]) {
+    const cand = midiNote + d;
+    const candPc = ((cand % 12) + 12) % 12;
+    if (chordPcs.includes(candPc)) return cand;
+  }
+  return snapToScale(midiNote, scalePcs);
 }
 
 // Snap a midi pitch to the nearest pitch class in `pcs`. Ties resolve up.

@@ -69,6 +69,10 @@ export class Scheduler {
     this.timerId = null;
     for (const id of this.pending) clearTimeout(id);
     this.pending.clear();
+    // Drop any queued swap/reset — start() will do its own composer.reset()
+    // anyway, and a leftover pendingAction would double-fire on the first
+    // tick after the next Start.
+    this.pendingAction = null;
     this.synth.allNotesOff();
   }
 

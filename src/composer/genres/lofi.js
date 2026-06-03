@@ -1,17 +1,18 @@
 // Lofi composer. Generates bars of MIDI events on three channels:
 //   0  Rhodes / Electric Piano  — block-voiced chord on the downbeat (& 3)
 //   1  Electric Bass            — root on 1, optionally 5th on 3
+//   2  Flute (optional lead)    — only used when a lead provider is attached
 //   9  Drum kit                 — boom-bap pattern from the rhythm library
 //
-// Composition strategy is intentionally simple: pick a 4-bar progression,
-// loop it 2–4 times, then maybe rotate to a different progression. Drum
-// pattern is fixed within a progression cycle. Slight per-bar humanisation
-// (velocity, optional 8th-note bass pickup into next bar) keeps things from
-// feeling locked-in.
+// Composition strategy: pick a 4-bar progression with random transposition,
+// loop it 2–3 times, then maybe rotate. Drum pattern is fixed within a
+// cycle; the last bar of the final cycle gets a 40% chance of a fill. Slight
+// per-bar humanisation keeps things from feeling locked.
 
-import { parseChord, chordScale } from '../theory.js';
+import { chordScale } from '../theory.js';
 import { pianoVoicing, bassRoot, bassFifth } from '../voicing.js';
-import { LOFI_PATTERNS, drumEvents } from '../rhythm.js';
+import { LOFI_PATTERNS, LOFI_FILLS, drumEvents } from '../rhythm.js';
+import { ProgressionCursor } from '../progression.js';
 
 const PROGRESSIONS = [
   ['Cmaj7',  'Am7',   'Dm7',   'G7'   ], // I  vi  ii V
@@ -34,31 +35,39 @@ const PROG_PIANO = 4;   // Electric Piano 1 (Rhodes-ish)
 const PROG_BASS  = 33;  // Electric Bass (finger)
 const PROG_LEAD  = 73;  // Flute — gentle single-line voice over the chords
 
+// 8th-note swing depth. ~0.09 of a beat lands the "and" of each beat just
+// noticeably late — classic lofi shuffle, not full triplet feel.
+const LOFI_SWING = 0.09;
+
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 export class LofiComposer {
   constructor() {
     this.bpm = 76;
-    this.progression = null;
     this.pattern = null;
-    this.parsed = null;
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    this.cyclesTarget = 0;
-    this.lead = null; // LeadProvider | null
+    this.lead = null;
+    this.cursor = new ProgressionCursor({
+      progressions: PROGRESSIONS,
+      cyclesMin: 2,
+      cyclesMax: 3,
+      onRotate: (parsed) => {
+        this.pattern = pickRandom(LOFI_PATTERNS);
+        if (this.lead) this.lead.startProgression?.(parsed, this.bpm);
+      },
+    });
   }
 
   setLead(provider) {
     this.lead = provider;
-    if (provider && this.parsed) {
-      provider.startProgression?.(this.parsed, this.bpm);
+    if (provider && this.cursor.parsed) {
+      provider.startProgression?.(this.cursor.parsed, this.bpm);
     }
   }
 
   reset() {
     // 70–84 bpm — slow enough to feel lofi, fast enough to not drag.
     this.bpm = 70 + Math.floor(Math.random() * 15);
-    this._rotate();
+    this.cursor.rotate();
     return {
       setup: [
         { channel: CH_PIANO, program: PROG_PIANO },
@@ -69,23 +78,11 @@ export class LofiComposer {
     };
   }
 
-  _rotate() {
-    this.progression = pickRandom(PROGRESSIONS);
-    this.parsed = this.progression.map(parseChord);
-    this.pattern = pickRandom(LOFI_PATTERNS);
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    // Stay on a progression 2–3 cycles (8–12 bars) before considering a swap.
-    this.cyclesTarget = 2 + Math.floor(Math.random() * 2);
-    if (this.lead) this.lead.startProgression?.(this.parsed, this.bpm);
-  }
+  nextBar(_barIndex) {
+    if (!this.cursor.parsed) this.reset();
 
-  nextBar(barIndex) {
-    if (!this.progression) this.reset();
-
-    const chord = this.parsed[this.barInProg];
-    const nextChord = this.parsed[(this.barInProg + 1) % this.parsed.length];
-
+    const chord = this.cursor.current();
+    const nextChord = this.cursor.next();
     const events = [];
 
     // --- piano: two block voicings per bar, on beat 1 and beat 3 ---
@@ -122,11 +119,12 @@ export class LofiComposer {
       });
     }
     if (Math.random() < 0.25) {
-      // 8th-note pickup to next bar's root: play next-bar root, an octave up
-      // from regular bass, on the & of beat 4 (time = 3.5).
+      // 8th-note pickup into next bar. We play the 5th of the NEXT chord
+      // an octave above the usual bass register — a soft "lift" that leads
+      // the ear into the downbeat without doubling the upcoming root.
       events.push({
         channel: CH_BASS,
-        note: bassRoot(nextChord) + 7, // a 5th up of next root — neutral pickup
+        note: bassFifth(nextChord) + 12,
         velocity: 70,
         time: 3.5,
         duration: 0.4,
@@ -134,12 +132,19 @@ export class LofiComposer {
     }
 
     // --- drums ---
-    events.push(...drumEvents(this.pattern, CH_DRUM));
+    // On the last bar of the very last cycle of a progression, 40% chance
+    // to use a fill instead of the regular pattern — breaks the loop right
+    // before we rotate to a new key/progression.
+    const drumPattern =
+      this.cursor.isFinalBarOfCycle() && Math.random() < 0.4
+        ? pickRandom(LOFI_FILLS)
+        : this.pattern;
+    events.push(...drumEvents(drumPattern, CH_DRUM, LOFI_SWING));
 
     // --- lead (optional) ---
     if (this.lead) {
       const scalePcs = chordScale(chord);
-      const leadNotes = this.lead.barNotes(chord, scalePcs, this.barInProg);
+      const leadNotes = this.lead.barNotes(chord, scalePcs, this.cursor.barInProg);
       for (const n of leadNotes) {
         events.push({
           channel: CH_LEAD,
@@ -151,22 +156,7 @@ export class LofiComposer {
       }
     }
 
-    // Advance progression cursor.
-    this.barInProg += 1;
-    if (this.barInProg >= this.progression.length) {
-      this.barInProg = 0;
-      this.cyclesDone += 1;
-      if (this.cyclesDone >= this.cyclesTarget) {
-        // 70% rotate to a fresh progression/pattern, 30% just keep going.
-        if (Math.random() < 0.7) {
-          this._rotate();
-        } else {
-          this.cyclesDone = 0;
-          this.cyclesTarget = 2 + Math.floor(Math.random() * 2);
-        }
-      }
-    }
-
+    this.cursor.advance();
     return { bpm: this.bpm, beats: 4, events };
   }
 }

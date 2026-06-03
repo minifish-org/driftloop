@@ -6,7 +6,7 @@
 // it by bar. Per bar we snap each pitch to that bar's chord scale — the
 // grammar guard called out by CLAUDE.md.
 
-import { snapToScale } from '../theory.js';
+import { snapToChordOrScale, buildChord } from '../theory.js';
 
 const MAGENTA_URL = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1';
 const CHECKPOINT  = 'https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/basic_rnn';
@@ -98,21 +98,27 @@ export class RnnLead {
       bars.push(barNotes);
     }
     this.cache = bars;
-    if (bars.length) {
-      const last = bars[bars.length - 1];
-      if (last.length) this.lastPitchOfCache = last[last.length - 1].pitch;
-    }
+    // Note: we do NOT update lastPitchOfCache here. The raw RNN pitches
+    // can drift far out of scale; using them as a seed for the next
+    // progression compounds the drift. barNotes() updates lastPitchOfCache
+    // with the snapped/clamped pitch the listener actually hears instead.
   }
 
-  barNotes(_chord, scalePcs, barIdx) {
+  barNotes(chord, scalePcs, barIdx) {
     if (!this.cache || barIdx >= this.cache.length) return [];
     const bar = this.cache[barIdx];
     const [lo, hi] = this.range;
-    return bar.map(n => {
-      let p = snapToScale(n.pitch, scalePcs);
+    const chordPcs = buildChord(0, chord.quality).map(i => (chord.rootPc + i) % 12);
+    const snapped = bar.map(n => {
+      let p = snapToChordOrScale(n.pitch, chordPcs, scalePcs);
       while (p < lo) p += 12;
       while (p > hi) p -= 12;
       return { ...n, pitch: p };
     });
+    // Update the seed for the NEXT progression's generation to the actual
+    // last pitch the listener will hear (post-snap, post-clamp), not the
+    // raw RNN output that might be wildly out of scale.
+    if (snapped.length) this.lastPitchOfCache = snapped[snapped.length - 1].pitch;
+    return snapped;
   }
 }

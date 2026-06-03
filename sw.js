@@ -7,13 +7,15 @@
 // handler — they're large and the user may never opt into RNN, so it's
 // not worth precaching them.
 
-const CACHE = 'driftloop-v2';
+const CACHE = 'driftloop-v4';
 
 const SHELL = [
   './',
   './index.html',
   './manifest.json',
   './public/icons/icon.svg',
+  './vendor/js-synthesizer/libfluidsynth.js',
+  './vendor/js-synthesizer/js-synthesizer.js',
   // The SoundFont is NOT precached — it lives upstream on GitHub
   // (raw.githubusercontent.com) rather than in this deploy. The runtime
   // fetch handler below caches it on first request like any other GET.
@@ -29,8 +31,9 @@ const SHELL = [
   './src/composer/genres/jazz.js',
   './src/composer/genres/classical.js',
   './src/composer/lead/index.js',
-  './src/composer/lead/algo.js',
   './src/composer/lead/rnn.js',
+  './src/composer/progression.js',
+  './version.js',
 ];
 
 self.addEventListener('install', (event) => {

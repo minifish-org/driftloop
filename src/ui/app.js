@@ -9,6 +9,7 @@ import { Synth }       from '../synth/fluid.js';
 import { Scheduler }   from '../synth/scheduler.js';
 import { GENRE_ORDER, makeComposer } from '../composer/genres/index.js';
 import { LEAD_MODES, makeLead }      from '../composer/lead/index.js';
+import { VERSION }     from '../../version.js';
 
 const $ = (id) => document.getElementById(id);
 const playBtn = $('play');
@@ -18,9 +19,32 @@ const leadBtn = $('lead');
 const status  = $('status');
 const genreEls = Array.from(document.querySelectorAll('.genre'));
 
+// Parse initial state from the URL so links like
+//   driftloop.pages.dev/?g=jazz&lead=rnn
+// open straight into a specific genre / lead mode.
+function readUrlState() {
+  const params = new URLSearchParams(location.search);
+  const g = params.get('g');
+  const lead = params.get('lead');
+  return {
+    genre: GENRE_ORDER.includes(g) ? g : 'lofi',
+    leadIdx: LEAD_MODES.includes(lead) ? LEAD_MODES.indexOf(lead) : 0,
+  };
+}
+
+function writeUrlState() {
+  const params = new URLSearchParams();
+  if (activeGenre !== 'lofi') params.set('g', activeGenre);
+  if (leadMode() !== 'off' && leadActive()) params.set('lead', leadMode());
+  const qs = params.toString();
+  const url = qs ? `?${qs}` : location.pathname;
+  history.replaceState(null, '', url);
+}
+
+const initial = readUrlState();
 const synth = new Synth();
-let activeGenre = 'lofi';
-let leadModeIdx = 0;        // index into LEAD_MODES
+let activeGenre = initial.genre;
+let leadModeIdx = initial.leadIdx;
 let currentLead = null;     // active lead provider, shared across composers
 let composer  = makeComposer(activeGenre);
 const scheduler = new Scheduler(synth, composer);
@@ -30,8 +54,14 @@ function setStatus(line) { if (status) status.textContent = line; }
 
 function leadMode() { return LEAD_MODES[leadModeIdx]; }
 
+// Only lofi and jazz wire a lead voice into their bar output; ambient and
+// classical ignore setLead(). The button reflects this so users don't get
+// confused when toggling produces no audible change.
+const LEAD_GENRES = new Set(['lofi', 'jazz']);
+function leadActive() { return LEAD_GENRES.has(activeGenre); }
+
 function refreshLeadBtn() {
-  leadBtn.textContent = `Lead: ${leadMode()}`;
+  leadBtn.textContent = leadActive() ? `Lead: ${leadMode()}` : 'Lead: n/a';
 }
 
 function setButtons() {
@@ -39,11 +69,12 @@ function setButtons() {
   playBtn.disabled = loading || state === 'playing';
   stopBtn.disabled = state !== 'playing';
   nextBtn.disabled = loading;
-  leadBtn.disabled = loading;
+  leadBtn.disabled = loading || !leadActive();
   for (const el of genreEls) {
     el.disabled = loading;
     el.classList.toggle('active', el.dataset.genre === activeGenre);
   }
+  refreshLeadBtn();
 }
 
 async function ensureLoaded() {
@@ -62,9 +93,8 @@ async function ensureLoaded() {
 
 function statusForPlaying() {
   const m = leadMode();
-  return m === 'off'
-    ? `Playing — ${activeGenre}.`
-    : `Playing — ${activeGenre} (lead: ${m}).`;
+  if (!leadActive() || m === 'off') return `Playing — ${activeGenre}.`;
+  return `Playing — ${activeGenre} (lead: ${m}).`;
 }
 
 async function doPlay() {
@@ -76,6 +106,9 @@ async function doPlay() {
   state = 'playing';
   setStatus(statusForPlaying());
   setButtons();
+  // Wake lock is acquired only after a successful start so we never leak
+  // it on a failed SoundFont fetch.
+  acquireWakeLock();
 }
 
 function doStop() {
@@ -83,6 +116,7 @@ function doStop() {
   state = 'stopped';
   setStatus('Stopped. Click Play to resume.');
   setButtons();
+  releaseWakeLock();
 }
 
 function doNext() {
@@ -104,6 +138,7 @@ function selectGenre(id) {
   composer = makeComposer(id);
   if (currentLead) composer.setLead(currentLead);
   scheduler.swapComposerAtNextBar(composer);
+  writeUrlState();
   if (state === 'playing') {
     setStatus(`Switching to ${activeGenre} at next bar…`);
     setTimeout(() => { if (state === 'playing') setStatus(statusForPlaying()); }, 1200);
@@ -116,6 +151,7 @@ function selectGenre(id) {
 async function cycleLead() {
   leadModeIdx = (leadModeIdx + 1) % LEAD_MODES.length;
   refreshLeadBtn();
+  writeUrlState();
   const mode = leadMode();
   try {
     currentLead = makeLead(mode, { onStatus: setStatus });
@@ -147,8 +183,20 @@ leadBtn.addEventListener('click', () => cycleLead().catch(console.error));
 // Register the service worker for offline support. Fire-and-forget — if
 // it fails (older browser, or running off file://) the app still works,
 // just without offline caching.
+//
+// We also listen for `controllerchange` so the user sees a notice when a
+// new SW takes over (our SW calls clients.claim() on activate, so this
+// fires the moment a new build is live). The page keeps running with the
+// already-loaded modules — the user just won't see code changes until
+// they reload.
 if ('serviceWorker' in navigator) {
+  let initialController = navigator.serviceWorker.controller;
   navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed:', e));
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // First controller assignment on a fresh page load is not an "update".
+    if (!initialController) { initialController = navigator.serviceWorker.controller; return; }
+    setStatus('New version available — reload to apply.');
+  });
 }
 
 // Screen Wake Lock keeps the device awake while playing. Best-effort:
@@ -178,10 +226,35 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Hook wake lock into Play/Stop. We re-wrap doPlay/doStop minimally
-// rather than re-edit them so the original control flow stays obvious.
-playBtn.addEventListener('click', () => acquireWakeLock());
-stopBtn.addEventListener('click', () => releaseWakeLock());
+// Keyboard shortcuts. Space plays/stops, arrows cycle genre, N re-seeds,
+// L toggles the lead. Skip when modifier keys or text inputs are in play.
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target instanceof HTMLInputElement) return;
+  const key = e.key;
+  if (key === ' ') {
+    e.preventDefault();
+    if (state === 'playing') doStop();
+    else doPlay().catch(console.error);
+  } else if (key === 'ArrowRight' || key === 'ArrowLeft') {
+    e.preventDefault();
+    const i = GENRE_ORDER.indexOf(activeGenre);
+    const step = key === 'ArrowRight' ? 1 : -1;
+    const next = GENRE_ORDER[(i + step + GENRE_ORDER.length) % GENRE_ORDER.length];
+    selectGenre(next);
+  } else if (key === 'n' || key === 'N') {
+    e.preventDefault();
+    doNext();
+  } else if (key === 'l' || key === 'L') {
+    if (!leadActive()) return;
+    e.preventDefault();
+    cycleLead().catch(console.error);
+  }
+});
+
+// Stamp build SHA (or 'dev' locally) into the footer.
+const versionEl = document.getElementById('version');
+if (versionEl) versionEl.textContent = `build ${VERSION}`;
 
 refreshLeadBtn();
 setStatus('Ready. Pick a genre and click Play (first time pulls ~32 MB SoundFont).');

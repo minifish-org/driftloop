@@ -2,7 +2,8 @@
 // acoustic piano, with a string-ensemble pad sustaining the harmony
 // underneath. No drums. Functional triadic harmony, mostly major keys.
 
-import { parseChord, buildChord, intoRange } from '../theory.js';
+import { buildChord, intoRange } from '../theory.js';
+import { ProgressionCursor } from '../progression.js';
 
 // Progressions are bare triads — quality is implied (no 7th extensions,
 // keeping it Common-Practice).
@@ -58,12 +59,15 @@ function stringsBar(chord) {
 export class ClassicalComposer {
   constructor() {
     this.bpm = 96;
-    this.progression = null;
-    this.parsed = null;
     this.arpPattern = null;
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    this.cyclesTarget = 0;
+    this.cursor = new ProgressionCursor({
+      progressions: PROGRESSIONS,
+      cyclesMin: 1,
+      cyclesMax: 2,
+      onRotate: () => {
+        this.arpPattern = pickRandom(ARP_PATTERNS);
+      },
+    });
   }
 
   // Classical doesn't take a lead — the arpeggios are already the
@@ -72,7 +76,7 @@ export class ClassicalComposer {
 
   reset() {
     this.bpm = 84 + Math.floor(Math.random() * 26); // 84–109
-    this._rotate();
+    this.cursor.rotate();
     return {
       setup: [
         { channel: CH_PIANO,   program: PROG_PIANO   },
@@ -81,18 +85,9 @@ export class ClassicalComposer {
     };
   }
 
-  _rotate() {
-    this.progression = pickRandom(PROGRESSIONS);
-    this.parsed = this.progression.map(parseChord);
-    this.arpPattern = pickRandom(ARP_PATTERNS);
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    this.cyclesTarget = 1 + Math.floor(Math.random() * 2);
-  }
-
   nextBar(_barIndex) {
-    if (!this.progression) this.reset();
-    const chord = this.parsed[this.barInProg];
+    if (!this.cursor.parsed) this.reset();
+    const chord = this.cursor.current();
     const events = [];
 
     // Piano arpeggio: 8 eighth-notes per bar (beat units 0.0, 0.5, 1.0, …, 3.5)
@@ -118,16 +113,7 @@ export class ClassicalComposer {
       });
     }
 
-    this.barInProg += 1;
-    if (this.barInProg >= this.parsed.length) {
-      this.barInProg = 0;
-      this.cyclesDone += 1;
-      if (this.cyclesDone >= this.cyclesTarget) {
-        if (Math.random() < 0.7) this._rotate();
-        else { this.cyclesDone = 0; this.cyclesTarget = 1 + Math.floor(Math.random() * 2); }
-      }
-    }
-
+    this.cursor.advance();
     return { bpm: this.bpm, beats: 4, events };
   }
 }

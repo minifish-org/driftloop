@@ -91,6 +91,12 @@
     font-size: 12px;
   }
   footer a { color: inherit; }
+  .version {
+    display: inline-block;
+    margin-left: 8px;
+    opacity: 0.6;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
 </style>
 </head>
 <body>
@@ -119,12 +125,15 @@
   Composition: vanilla JS rules per genre — chord libraries, voicings,
   walking bass, swing drums, arpeggios, pads. No prerecorded audio. No
   server. See <a href="README.md">README</a>.
+  <span id="version" class="version"></span>
 </footer>
 
 <!-- js-synthesizer ships as UMD globals. Order matters: the WASM loader
-     must run before the JS wrapper. -->
-<script src="https://unpkg.com/js-synthesizer@1.8.5/externals/libfluidsynth-2.3.0-with-libsndfile.js"></script>
-<script src="https://unpkg.com/js-synthesizer@1.8.5/dist/js-synthesizer.js"></script>
+     must run before the JS wrapper. Vendored locally from
+     unpkg.com/js-synthesizer@1.8.5 to avoid a CDN single-point-of-failure
+     and to make the app fully self-hosted on Cloudflare Pages. -->
+<script src="vendor/js-synthesizer/libfluidsynth.js"></script>
+<script src="vendor/js-synthesizer/js-synthesizer.js"></script>
 
 <script type="module" src="src/ui/app.js"></script>
 

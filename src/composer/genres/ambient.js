@@ -1,8 +1,10 @@
-// Ambient composer. Two warm pads, no drums, slow harmonic motion
-// (chord change once every 2 bars). The defining signal is a long sustain
-// with no rhythmic pulse — that's how the ear identifies the genre.
+// Ambient composer. Two warm pads + a sparse glockenspiel top, no drums,
+// slow harmonic motion (chord change once every 2 bars via the cursor's
+// barsPerChord=2). The defining signal is long sustains with no rhythmic
+// pulse — the ear identifies the genre instantly.
 
-import { parseChord, buildChord, intoRange } from '../theory.js';
+import { buildChord, intoRange } from '../theory.js';
+import { ProgressionCursor } from '../progression.js';
 
 const PROGRESSIONS = [
   ['Cmaj9',  'Fmaj9' ],                          // 2-chord drone
@@ -15,12 +17,13 @@ const PROGRESSIONS = [
 
 const CH_PAD_LOW  = 0;
 const CH_PAD_HIGH = 1;
+const CH_CHIME    = 2;
 
 // 89 = Pad 2 (Warm), 92 = Pad 5 (Bowed glass) — both very slow attack/release.
+// 9  = Glockenspiel — clear bell-like single hits as a sparse top layer.
 const PROG_PAD_LOW  = 89;
 const PROG_PAD_HIGH = 92;
-
-function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+const PROG_CHIME    = 9;
 
 // Pad low voice: root + 5th in low octave, very long sustain.
 function padLowVoicing(chord) {
@@ -39,11 +42,12 @@ function padHighVoicing(chord) {
 export class AmbientComposer {
   constructor() {
     this.bpm = 60;
-    this.progression = null;
-    this.parsed = null;
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    this.cyclesTarget = 0;
+    this.cursor = new ProgressionCursor({
+      progressions: PROGRESSIONS,
+      cyclesMin: 1,
+      cyclesMax: 2,
+      barsPerChord: 2, // each chord rings for two full bars
+    });
   }
 
   // Ambient doesn't support a lead voice — the pads ARE the texture.
@@ -54,36 +58,25 @@ export class AmbientComposer {
     // 50–68 bpm. Pace barely matters since chords last 2 bars, but lower
     // bpm gives the scheduler more time per bar.
     this.bpm = 50 + Math.floor(Math.random() * 19);
-    this._rotate();
+    this.cursor.rotate();
     return {
       setup: [
         { channel: CH_PAD_LOW,  program: PROG_PAD_LOW  },
         { channel: CH_PAD_HIGH, program: PROG_PAD_HIGH },
+        { channel: CH_CHIME,    program: PROG_CHIME    },
       ],
     };
   }
 
-  _rotate() {
-    this.progression = pickRandom(PROGRESSIONS);
-    this.parsed = this.progression.map(parseChord);
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    this.cyclesTarget = 1 + Math.floor(Math.random() * 2);
-  }
-
   nextBar(_barIndex) {
-    if (!this.progression) this.reset();
-
-    // Each chord spans TWO bars. Use barInProg as the slow cursor (one
-    // step per bar), but only emit fresh note-ons on even bars; odd bars
-    // are "silent" (notes still ringing from the previous bar's downbeat).
-    const chordIdx = Math.floor(this.barInProg / 2) % this.parsed.length;
-    const chord = this.parsed[chordIdx];
+    if (!this.cursor.parsed) this.reset();
+    const chord = this.cursor.current();
     const events = [];
 
-    if (this.barInProg % 2 === 0) {
-      // ring through two full bars (8 beats) — pads naturally cross-fade.
-      const dur = 8.0;
+    // Only emit fresh pad note-ons on the first bar of each chord — the
+    // notes already scheduled there ring for the whole 2-bar span.
+    if (this.cursor.isChordChangeBar()) {
+      const dur = 8.0; // pads naturally cross-fade across 2-bar boundaries
       for (const note of padLowVoicing(chord)) {
         events.push({ channel: CH_PAD_LOW,  note, velocity: 70, time: 0.0, duration: dur });
       }
@@ -92,17 +85,24 @@ export class AmbientComposer {
       }
     }
 
-    this.barInProg += 1;
-    // Each progression is N chords × 2 bars. End of a full cycle:
-    if (this.barInProg >= this.parsed.length * 2) {
-      this.barInProg = 0;
-      this.cyclesDone += 1;
-      if (this.cyclesDone >= this.cyclesTarget) {
-        if (Math.random() < 0.7) this._rotate();
-        else { this.cyclesDone = 0; this.cyclesTarget = 1 + Math.floor(Math.random() * 2); }
-      }
+    // Sparse glockenspiel top layer — one bell every other bar on average,
+    // landing on an off-beat so it doesn't feel meter-aligned. Picks a
+    // chord tone in C5..C6 so it sings clearly above the pads.
+    if (Math.random() < 0.45) {
+      const ints = buildChord(0, chord.quality);
+      const tone = ints[1 + Math.floor(Math.random() * (ints.length - 1))]; // 3rd / 5th / 7th
+      const pitch = intoRange(chord.rootPc + 60 + tone, 72, 88);
+      const startTime = 1 + Math.random() * 2.5; // beat 1.0 .. 3.5
+      events.push({
+        channel: CH_CHIME,
+        note: pitch,
+        velocity: 48 + Math.floor(Math.random() * 10),
+        time: startTime,
+        duration: 3.0, // let it ring
+      });
     }
 
+    this.cursor.advance();
     return { bpm: this.bpm, beats: 4, events };
   }
 }

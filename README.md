@@ -78,8 +78,10 @@ Connect this repo via the Cloudflare dashboard:
 1. Push the project to GitHub / GitLab.
 2. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect
    to Git → pick the repo.
-3. Build settings: **Framework preset = None**, **Build command = (empty)**,
-   **Build output directory = `/`**. driftloop has no build step.
+3. Build settings: **Framework preset = None**, **Build command =
+   `bash scripts/build.sh`** (this stamps the deploy commit SHA into
+   `version.js` so the running app can show what's live), **Build
+   output directory = `/`**.
 4. Deploy. Site appears at `<project>.pages.dev` within ~30 s.
 
 Or from a clone using Wrangler:

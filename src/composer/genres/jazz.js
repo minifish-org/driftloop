@@ -3,7 +3,8 @@
 // pattern with hat on 2 & 4. The unmistakable signals are the walking
 // bass and the swung ride.
 
-import { parseChord, buildChord, intoRange, chordScale } from '../theory.js';
+import { buildChord, intoRange, chordScale } from '../theory.js';
+import { ProgressionCursor } from '../progression.js';
 
 const PROGRESSIONS = [
   ['Dm7',   'G7',    'Cmaj7', 'Cmaj7'],
@@ -95,24 +96,27 @@ function swingDrumEvents() {
 export class JazzComposer {
   constructor() {
     this.bpm = 130;
-    this.progression = null;
-    this.parsed = null;
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    this.cyclesTarget = 0;
     this.lead = null;
+    this.cursor = new ProgressionCursor({
+      progressions: PROGRESSIONS,
+      cyclesMin: 2,
+      cyclesMax: 3,
+      onRotate: (parsed) => {
+        if (this.lead) this.lead.startProgression?.(parsed, this.bpm);
+      },
+    });
   }
 
   setLead(provider) {
     this.lead = provider;
-    if (provider && this.parsed) {
-      provider.startProgression?.(this.parsed, this.bpm);
+    if (provider && this.cursor.parsed) {
+      provider.startProgression?.(this.cursor.parsed, this.bpm);
     }
   }
 
   reset() {
     this.bpm = 115 + Math.floor(Math.random() * 31); // 115–145
-    this._rotate();
+    this.cursor.rotate();
     return {
       setup: [
         { channel: CH_PIANO, program: PROG_PIANO },
@@ -122,19 +126,10 @@ export class JazzComposer {
     };
   }
 
-  _rotate() {
-    this.progression = pickRandom(PROGRESSIONS);
-    this.parsed = this.progression.map(parseChord);
-    this.barInProg = 0;
-    this.cyclesDone = 0;
-    this.cyclesTarget = 2 + Math.floor(Math.random() * 2);
-    if (this.lead) this.lead.startProgression?.(this.parsed, this.bpm);
-  }
-
   nextBar(_barIndex) {
-    if (!this.progression) this.reset();
-    const chord = this.parsed[this.barInProg];
-    const nextChord = this.parsed[(this.barInProg + 1) % this.parsed.length];
+    if (!this.cursor.parsed) this.reset();
+    const chord = this.cursor.current();
+    const nextChord = this.cursor.next();
     const events = [];
 
     // Piano comping: chord stabs on "and of 2" and "and of 4" (Charleston-ish).
@@ -172,7 +167,7 @@ export class JazzComposer {
     // Lead (optional)
     if (this.lead) {
       const scalePcs = chordScale(chord);
-      const leadNotes = this.lead.barNotes(chord, scalePcs, this.barInProg);
+      const leadNotes = this.lead.barNotes(chord, scalePcs, this.cursor.barInProg);
       for (const n of leadNotes) {
         events.push({
           channel: CH_LEAD,
@@ -184,16 +179,7 @@ export class JazzComposer {
       }
     }
 
-    this.barInProg += 1;
-    if (this.barInProg >= this.parsed.length) {
-      this.barInProg = 0;
-      this.cyclesDone += 1;
-      if (this.cyclesDone >= this.cyclesTarget) {
-        if (Math.random() < 0.7) this._rotate();
-        else { this.cyclesDone = 0; this.cyclesTarget = 2 + Math.floor(Math.random() * 2); }
-      }
-    }
-
+    this.cursor.advance();
     return { bpm: this.bpm, beats: 4, events };
   }
 }
