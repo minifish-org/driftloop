@@ -265,5 +265,5 @@ const versionEl = document.getElementById('version');
 if (versionEl) versionEl.textContent = `build ${VERSION}`;
 
 refreshLeadBtn();
-setStatus('Ready. Pick a genre and click Play (first time pulls ~32 MB SoundFont).');
+setStatus('Ready. Pick a genre and click Play (first time pulls ~40 MB SoundFont).');
 setButtons();

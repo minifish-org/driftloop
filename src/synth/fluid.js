@@ -2,14 +2,19 @@
 // <script> tags in index.html). Exposes a small, ESM-friendly facade so the
 // rest of the codebase doesn't have to know about the global JSSynth object.
 
-// GeneralUser-GS is hosted upstream by its maintainer (mrbumpy409). The
-// raw GitHub URL sets Access-Control-Allow-Origin: * so the browser can
-// fetch it cross-origin from wherever this app is deployed. We fetch from
-// upstream rather than bundling the 32 MB file with the deploy because
-// Cloudflare Pages (our deploy target) caps single files at 25 MiB. After
-// the first successful fetch the service worker caches the response, so
-// subsequent loads are fully offline.
-const DEFAULT_SF_URL = 'https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2';
+// MuseScore General Lite — 40 MB SF3 (Vorbis-compressed inside, decodes
+// back to the same PCM at playback time). LibreScore hosts it on
+// raw.githubusercontent.com with .wasm suffix as a workaround for some
+// GitHub binary-hosting quirk; the file is a real RIFF/sfbk SoundFont,
+// verifiable by reading the first 16 bytes. The URL sends
+// Access-Control-Allow-Origin: * so the browser can fetch it cross-origin
+// from anywhere the app is deployed. After the first successful fetch
+// the service worker caches the response, so subsequent loads are fully
+// offline.
+//
+// We fetch from upstream rather than bundling the file because Cloudflare
+// Pages caps single deploy files at 25 MiB.
+const DEFAULT_SF_URL = 'https://raw.githubusercontent.com/LibreScore/sf3/master/MuseScore_General_Lite.sf3.wasm';
 
 // Stream a Response body to an ArrayBuffer, reporting progress as bytes
 // arrive. Content-Length is best-effort — opaque responses (SW-cached
