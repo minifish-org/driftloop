@@ -105,6 +105,11 @@ function statusForPlaying() {
   return `Playing — ${activeGenre} (lead: ${m}).`;
 }
 
+// Vinyl bed: lofi only, and only while playing.
+function applyVinyl() {
+  synth.setVinyl(state === 'playing' && activeGenre === 'lofi');
+}
+
 async function doPlay() {
   await ensureLoaded();
   await scheduler.start();
@@ -114,6 +119,7 @@ async function doPlay() {
   state = 'playing';
   setStatus(statusForPlaying());
   setButtons();
+  applyVinyl();
   // Wake lock is acquired only after a successful start so we never leak
   // it on a failed SoundFont fetch.
   acquireWakeLock();
@@ -124,6 +130,7 @@ function doStop() {
   state = 'stopped';
   setStatus('Stopped. Click Play to resume.');
   setButtons();
+  applyVinyl();
   releaseWakeLock();
 }
 
@@ -146,6 +153,7 @@ function selectGenre(id) {
   composer = makeComposer(id);
   if (currentLead) composer.setLead(currentLead);
   scheduler.swapComposerAtNextBar(composer);
+  applyVinyl();
   writeUrlState();
   if (state === 'playing') {
     setStatus(`Switching to ${activeGenre} at next bar…`);

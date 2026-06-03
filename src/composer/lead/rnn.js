@@ -44,7 +44,10 @@ export class RnnLead {
     this.modelReady = null;
     this.cache = null;
     this.activeKey = null;
-    this.lastPitchOfCache = 67;
+    // Last bar's worth of snapped notes — used as the prime for the next
+    // progression's continuation so the line keeps flowing across the
+    // boundary instead of restarting from a fixed seed each time.
+    this.primeTail = [];
   }
 
   async ensureModel() {
@@ -81,12 +84,33 @@ export class RnnLead {
     if (this.activeKey !== key) return; // user moved on
 
     const totalSteps = chords.length * 16; // 16 sixteenth-steps per bar
-    const seedPitch = this.lastPitchOfCache;
-    const prime = {
-      notes: [{ pitch: seedPitch, quantizedStartStep: 0, quantizedEndStep: 2 }],
-      quantizationInfo: { stepsPerQuarter: 4 },
-      totalQuantizedSteps: 2,
-    };
+
+    // Build prime from the previous bar's tail when we have one; otherwise
+    // a default G4 quarter-note seed for cold starts.
+    const primeNotes = this.primeTail
+      .map(n => {
+        const start = Math.max(0, Math.floor(n.time * 4));
+        const end = Math.min(16, Math.ceil((n.time + n.duration) * 4));
+        return {
+          pitch: n.pitch,
+          quantizedStartStep: start,
+          quantizedEndStep: Math.max(start + 1, end),
+        };
+      })
+      .filter(n => n.quantizedStartStep < 16);
+
+    const prime = primeNotes.length > 0
+      ? {
+          notes: primeNotes,
+          quantizationInfo: { stepsPerQuarter: 4 },
+          totalQuantizedSteps: 16,
+        }
+      : {
+          notes: [{ pitch: 67, quantizedStartStep: 0, quantizedEndStep: 2 }],
+          quantizationInfo: { stepsPerQuarter: 4 },
+          totalQuantizedSteps: 2,
+        };
+
     const cont = await this.model.continueSequence(prime, totalSteps, this.temperature);
     if (this.activeKey !== key) return;
 
@@ -105,10 +129,9 @@ export class RnnLead {
       bars.push(barNotes);
     }
     this.cache = bars;
-    // Note: we do NOT update lastPitchOfCache here. The raw RNN pitches
-    // can drift far out of scale; using them as a seed for the next
-    // progression compounds the drift. barNotes() updates lastPitchOfCache
-    // with the snapped/clamped pitch the listener actually hears instead.
+    // primeTail is populated by barNotes() with the snapped/clamped pitches
+    // the listener actually hears — using raw RNN output here would compound
+    // drift across rotations.
   }
 
   // ctx: { chord, scale, chordTones } — built by the composer via
@@ -124,10 +147,10 @@ export class RnnLead {
       while (p > hi) p -= 12;
       return { ...n, pitch: p };
     });
-    // Update the seed for the NEXT progression's generation to the actual
-    // last pitch the listener will hear (post-snap, post-clamp), not the
-    // raw RNN output that might be wildly out of scale.
-    if (snapped.length) this.lastPitchOfCache = snapped[snapped.length - 1].pitch;
+    // Capture this bar's snapped notes as the prime tail for the next
+    // progression's generation — gives the line continuity across rotation
+    // boundaries instead of restarting from a fixed seed.
+    if (snapped.length > 0) this.primeTail = snapped;
     return snapped;
   }
 }

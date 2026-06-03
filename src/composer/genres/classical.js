@@ -14,6 +14,12 @@ const PROGRESSIONS = [
   ['Dm', 'A',  'Bb', 'F',  'Gm', 'Dm', 'Gm', 'A' ], // Vivaldi-flavoured
   ['F',  'C',  'Dm', 'Am', 'Bb', 'F',  'Bb', 'C' ],
   ['G',  'D',  'Em', 'Bm', 'C',  'G',  'C',  'D' ], // Pachelbel in G
+  ['Am', 'F',  'C',  'G',  'Am', 'F',  'C',  'E' ], // minor with picardy
+  ['Em', 'Am', 'D',  'G',  'C',  'F#dim','B', 'Em'], // Bach-style minor circle
+  ['Dm', 'Gm', 'A',  'Dm', 'Bb', 'F',  'Gm', 'A' ], // dorian-ish minor
+  ['C',  'F',  'G',  'C',  'F',  'G',  'Am', 'F' ], // hymn-like plagal feel
+  ['Am', 'E',  'F',  'Dm', 'Bb', 'Am', 'E',  'Am'], // harmonic minor outline
+  ['G',  'Em', 'C',  'D',  'G',  'Em', 'Am', 'D' ], // G major folk
 ];
 
 const CH_PIANO   = 0;

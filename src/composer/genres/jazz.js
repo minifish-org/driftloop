@@ -4,6 +4,7 @@
 // bass and the swung ride.
 
 import { buildChord, intoRange, chordScale, buildChordContext } from '../theory.js';
+import { pianoVoicing } from '../voicing.js';
 import { ProgressionCursor } from '../progression.js';
 
 const PROGRESSIONS = [
@@ -14,6 +15,13 @@ const PROGRESSIONS = [
   ['Em7',   'A7',    'Dm7',   'G7'   ],
   ['Dm7',   'G7',    'Em7',   'A7'   ],
   ['Cmaj7', 'F7',    'Em7',   'A7'   ],   // jazz blues-ish
+  ['Cmaj7', 'Ebm7',  'Dm7',   'G7'   ],   // chromatic approach
+  ['Dm7',   'Db7',   'Cmaj7', 'Cmaj7'],   // tritone sub for G7
+  ['Am7',   'D7',    'Gmaj7', 'Cmaj7'],   // ii-V to IV
+  ['Cmaj7', 'C7',    'Fmaj7', 'Fm7'   ],  // borrowed iv minor
+  ['Fmaj7', 'Dm7',   'G7',    'Cmaj7'],   // IV-ii-V-I
+  ['Bm7b5', 'E7',    'Am7',   'D7'    ],  // minor ii-V then secondary
+  ['Cmaj7', 'F7',    'Bbmaj7','A7'    ],  // circle-of-4ths down
 ];
 
 const CH_PIANO = 0;
@@ -26,20 +34,6 @@ const PROG_BASS  = 32;  // Acoustic Bass (upright)
 const PROG_LEAD  = 66;  // Tenor Sax
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-// Rootless drop-2 voicing for piano comping. Built around C4.
-function jazzPianoVoicing(chord) {
-  const ints = buildChord(0, chord.quality).slice(1); // 3,5,7[,9]
-  const pcs = ints.map(i => (chord.rootPc + i) % 12);
-  // place all near C4..C5
-  const notes = pcs.map(pc => {
-    let n = pc + 60;
-    while (n < 55) n += 12;
-    while (n > 75) n -= 12;
-    return n;
-  });
-  return Array.from(new Set(notes)).sort((a, b) => a - b);
-}
 
 // Walking-bass step generator for one bar.
 //   beat 1: chord root in low octave
@@ -97,11 +91,16 @@ export class JazzComposer {
   constructor() {
     this.bpm = 130;
     this.lead = null;
+    this.prevVoicing = null;
+    this.breakdownBar = -1;
+    this.breakdownVoice = null;
+    this._breakdownCycleId = -1;
     this.cursor = new ProgressionCursor({
       progressions: PROGRESSIONS,
       cyclesMin: 2,
       cyclesMax: 3,
       onRotate: (parsed) => {
+        this._breakdownCycleId = -1;
         if (this.lead) this.lead.startProgression?.(parsed, this.bpm);
       },
     });
@@ -129,41 +128,63 @@ export class JazzComposer {
 
   nextBar(_barIndex) {
     if (!this.cursor.parsed) this.restart();
+
+    if (this._breakdownCycleId !== this.cursor.cyclesDone) {
+      this._breakdownCycleId = this.cursor.cyclesDone;
+      if (Math.random() < 0.35 && this.cursor.parsed.length > 1) {
+        this.breakdownBar = 1 + Math.floor(Math.random() * (this.cursor.parsed.length - 1));
+        this.breakdownVoice = pickRandom(['piano', 'bass', 'drums']);
+      } else {
+        this.breakdownBar = -1;
+        this.breakdownVoice = null;
+      }
+    }
+
     const chord = this.cursor.current();
     const nextChord = this.cursor.next();
     const events = [];
 
+    const isBreakdownBar = this.cursor.barInProg === this.breakdownBar;
+    const dropPiano = isBreakdownBar && this.breakdownVoice === 'piano';
+    const dropBass  = isBreakdownBar && this.breakdownVoice === 'bass';
+    const dropDrums = isBreakdownBar && this.breakdownVoice === 'drums';
+
     // Piano comping: chord stabs on "and of 2" and "and of 4" (Charleston-ish).
-    const voicing = jazzPianoVoicing(chord);
-    const compTimes = Math.random() < 0.5 ? [1.667, 3.0]
-                    : Math.random() < 0.5 ? [1.0, 2.667]
-                    : [1.667, 3.667];
-    for (const t of compTimes) {
-      for (const note of voicing) {
-        events.push({
-          channel: CH_PIANO,
-          note,
-          velocity: 64 + Math.floor(Math.random() * 8),
-          time: t,
-          duration: 0.7,
-        });
+    const voicing = pianoVoicing(chord, this.prevVoicing);
+    this.prevVoicing = voicing;
+    if (!dropPiano) {
+      const compTimes = Math.random() < 0.5 ? [1.667, 3.0]
+                      : Math.random() < 0.5 ? [1.0, 2.667]
+                      : [1.667, 3.667];
+      for (const t of compTimes) {
+        for (const note of voicing) {
+          events.push({
+            channel: CH_PIANO,
+            note,
+            velocity: 64 + Math.floor(Math.random() * 8),
+            time: t,
+            duration: 0.7,
+          });
+        }
       }
     }
 
     // Walking bass: 4 quarter notes
-    const walk = walkingBassBar(chord, nextChord);
-    for (let i = 0; i < 4; i++) {
-      events.push({
-        channel: CH_BASS,
-        note: walk[i],
-        velocity: 84 + Math.floor(Math.random() * 6),
-        time: i,
-        duration: 0.85,
-      });
+    if (!dropBass) {
+      const walk = walkingBassBar(chord, nextChord);
+      for (let i = 0; i < 4; i++) {
+        events.push({
+          channel: CH_BASS,
+          note: walk[i],
+          velocity: 84 + Math.floor(Math.random() * 6),
+          time: i,
+          duration: 0.85,
+        });
+      }
     }
 
     // Drums
-    events.push(...swingDrumEvents());
+    if (!dropDrums) events.push(...swingDrumEvents());
 
     // Lead (optional)
     if (this.lead) {

@@ -13,17 +13,26 @@ const PROGRESSIONS = [
   ['Fmaj9',  'Cmaj9', 'Gmaj7',  'Am9'  ],
   ['Cmaj9',  'Am9'                       ],      // i-vi
   ['Dmaj7',  'Amaj7', 'Emaj7',  'Bmaj7'],        // bright modal
+  ['Cmaj9',  'Gmaj7', 'Dmaj9',  'Amaj9'],        // bright cycle up
+  ['Am9',    'Em9'                       ],      // minor drone pair
+  ['Fmaj7',  'Bbmaj7'                    ],      // perfect-4th cycle
+  ['Cmaj9',  'Ebmaj9','Gmaj9' ],                 // chromatic mediants
 ];
 
 const CH_PAD_LOW  = 0;
 const CH_PAD_HIGH = 1;
 const CH_CHIME    = 2;
+const CH_DRONE    = 3;
 
 // 89 = Pad 2 (Warm), 92 = Pad 5 (Bowed glass) — both very slow attack/release.
 // 9  = Glockenspiel — clear bell-like single hits as a sparse top layer.
+// 88 = Pad 1 (New Age) — slow sustained tone, used here as a sub-anchor
+//      drone on the progression's tonic. Holds for one full cycle, so the
+//      pads have a fixed harmonic floor to wash against.
 const PROG_PAD_LOW  = 89;
 const PROG_PAD_HIGH = 92;
 const PROG_CHIME    = 9;
+const PROG_DRONE    = 88;
 
 // Pad low voice: root + 5th in low octave, very long sustain.
 function padLowVoicing(chord) {
@@ -59,6 +68,7 @@ export class AmbientComposer {
       { channel: CH_PAD_LOW,  program: PROG_PAD_LOW  },
       { channel: CH_PAD_HIGH, program: PROG_PAD_HIGH },
       { channel: CH_CHIME,    program: PROG_CHIME    },
+      { channel: CH_DRONE,    program: PROG_DRONE    },
     ];
   }
 
@@ -73,6 +83,23 @@ export class AmbientComposer {
     if (!this.cursor.parsed) this.restart();
     const chord = this.cursor.current();
     const events = [];
+
+    // Drone: on the first bar of each cycle, sound the tonic root of the
+    // progression for the full cycle (re-triggers on every cycle wrap and
+    // every rotation). Sub-bass register so it anchors without competing
+    // with the pad voicings above.
+    if (this.cursor.barInProg === 0) {
+      const tonicPc = this.cursor.parsed[0].rootPc;
+      const dronePitch = intoRange(tonicPc + 33, 30, 42); // ~F#1..F#2
+      const cycleBeats = this.cursor.barsPerCycle * 4;
+      events.push({
+        channel: CH_DRONE,
+        note: dronePitch,
+        velocity: 58,
+        time: 0,
+        duration: cycleBeats - 0.1, // tiny tail-trim so re-trigger doesn't overlap
+      });
+    }
 
     // Only emit fresh pad note-ons on the first bar of each chord — the
     // notes already scheduled there ring for the whole 2-bar span.

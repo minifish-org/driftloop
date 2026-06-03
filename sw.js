@@ -7,7 +7,7 @@
 // handler — they're large and the user may never opt into RNN, so it's
 // not worth precaching them.
 
-const CACHE = 'driftloop-v6';
+const CACHE = 'driftloop-v7';
 
 const SHELL = [
   './',
@@ -22,6 +22,7 @@ const SHELL = [
   './src/ui/app.js',
   './src/synth/fluid.js',
   './src/synth/scheduler.js',
+  './src/synth/texture.js',
   './src/composer/theory.js',
   './src/composer/voicing.js',
   './src/composer/rhythm.js',
