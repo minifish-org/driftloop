@@ -1,12 +1,38 @@
-// MelodyRNN lead. Lazy-loads Magenta.js + the Basic MelodyRNN checkpoint
-// the first time it's used (skipping the cost when the user never opts in).
+// MelodyRNN lead, ImprovRNN flavour. Lazy-loads Magenta.js + the
+// chord_pitches_improv checkpoint the first time it's used.
 //
-// At each progression rotation we generate ONE long melody covering the
-// whole progression (N bars × 16 sixteenth-note steps), then partition
-// it by bar. Per bar we snap each pitch to that bar's chord scale — the
-// grammar guard called out by CLAUDE.md.
+// ImprovRNN is the chord-conditioned cousin of Basic MelodyRNN: same size
+// (~5 MB), same API shape, but it takes a chord-per-step argument and
+// learns to follow the harmony natively. The output is in-key by
+// construction, so the original two-stage grammar-guard snap is no longer
+// load-bearing — we keep a soft range clamp (lo/hi) and trust the model
+// for everything else.
 
-import { snapToChordOrScale } from '../theory.js';
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+// Driftloop's internal quality enum → Magenta chord-symbol suffix.
+// Magenta's chord parser accepts standard pop/jazz notation; map to what
+// it understands. Anything missing falls back to the bare letter (= major).
+const QUALITY_TO_MAGENTA = {
+  'maj':    '',
+  'min':    'm',
+  'dim':    'dim',
+  'aug':    'aug',
+  'maj7':   'maj7',
+  'min7':   'm7',
+  'dom7':   '7',
+  'min7b5': 'm7b5',
+  'dim7':   'dim7',
+  'maj9':   'maj9',
+  'min9':   'm9',
+  'dom9':   '9',
+};
+
+function chordToMagentaSymbol(chord) {
+  const name = NOTE_NAMES[chord.rootPc];
+  const suffix = QUALITY_TO_MAGENTA[chord.quality] ?? '';
+  return name + suffix;
+}
 
 const MAGENTA_URL = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1';
 // SRI hash for the URL above. Generated with:
@@ -14,7 +40,7 @@ const MAGENTA_URL = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1';
 // If the version is bumped, this hash must be regenerated or the browser
 // will refuse to execute the script.
 const MAGENTA_INTEGRITY = 'sha384-eNedu+HVczAMF3JaSAb+Tk6zZnsSD+8h9dpG/RG2rtPqTR/LGUpGG0dEzf2y7F5e';
-const CHECKPOINT  = 'https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/basic_rnn';
+const CHECKPOINT = 'https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/chord_pitches_improv';
 
 let magentaLoaded = null;
 function loadMagenta() {
@@ -44,9 +70,8 @@ export class RnnLead {
     this.modelReady = null;
     this.cache = null;
     this.activeKey = null;
-    // Last bar's worth of snapped notes — used as the prime for the next
-    // progression's continuation so the line keeps flowing across the
-    // boundary instead of restarting from a fixed seed each time.
+    // Last bar's notes — used as prime for the next progression's
+    // continuation so the line keeps flowing across the boundary.
     this.primeTail = [];
   }
 
@@ -56,26 +81,25 @@ export class RnnLead {
       this.modelReady = (async () => {
         this.onStatus('Loading Magenta.js…');
         const mm = await loadMagenta();
-        this.onStatus('Loading MelodyRNN checkpoint…');
+        this.onStatus('Loading ImprovRNN checkpoint…');
         const model = new mm.MusicRNN(CHECKPOINT);
         await model.initialize();
         this.model = model;
-        this.onStatus('MelodyRNN ready.');
+        this.onStatus('ImprovRNN ready.');
       })();
     }
     await this.modelReady;
   }
 
   // Kick off generation for the whole progression. Fire-and-forget — bars
-  // played before generation completes will fall back to silence (caller
-  // can decide; we just return [] from barNotes if cache isn't ready).
+  // played before generation completes return [] from barNotes (silent).
   startProgression(chords, _bpm) {
     const key = chords.map(c => `${c.rootPc}:${c.quality}`).join('|') + '@' + Math.random();
     this.activeKey = key;
     this.cache = null;
     this._generate(chords, key).catch(err => {
-      console.error('MelodyRNN generation failed:', err);
-      this.onStatus('MelodyRNN failed (see console).');
+      console.error('ImprovRNN generation failed:', err);
+      this.onStatus('ImprovRNN failed (see console).');
     });
   }
 
@@ -111,7 +135,20 @@ export class RnnLead {
           totalQuantizedSteps: 2,
         };
 
-    const cont = await this.model.continueSequence(prime, totalSteps, this.temperature);
+    // ImprovRNN expects one chord symbol per output step. Each bar gets
+    // its chord replicated across all 16 steps of the bar.
+    const chordProgression = [];
+    for (const chord of chords) {
+      const sym = chordToMagentaSymbol(chord);
+      for (let i = 0; i < 16; i++) chordProgression.push(sym);
+    }
+
+    const cont = await this.model.continueSequence(
+      prime,
+      totalSteps,
+      this.temperature,
+      chordProgression,
+    );
     if (this.activeKey !== key) return;
 
     const bars = [];
@@ -129,28 +166,23 @@ export class RnnLead {
       bars.push(barNotes);
     }
     this.cache = bars;
-    // primeTail is populated by barNotes() with the snapped/clamped pitches
-    // the listener actually hears — using raw RNN output here would compound
-    // drift across rotations.
   }
 
-  // ctx: { chord, scale, chordTones } — built by the composer via
-  // buildChordContext(). Lets the lead apply its grammar guard (chord
-  // tone preferred, scale fallback) without re-deriving theory each bar.
-  barNotes(ctx, barIdx) {
+  // ctx: { chord, scale, chordTones } — accepted for backwards compatibility
+  // with the leadContext shape, but only `range` is used here. ImprovRNN
+  // outputs in-key by construction; we just clamp to the lead's register.
+  barNotes(_ctx, barIdx) {
     if (!this.cache || barIdx >= this.cache.length) return [];
     const bar = this.cache[barIdx];
     const [lo, hi] = this.range;
-    const snapped = bar.map(n => {
-      let p = snapToChordOrScale(n.pitch, ctx.chordTones, ctx.scale);
+    const clamped = bar.map(n => {
+      let p = n.pitch;
       while (p < lo) p += 12;
       while (p > hi) p -= 12;
       return { ...n, pitch: p };
     });
-    // Capture this bar's snapped notes as the prime tail for the next
-    // progression's generation — gives the line continuity across rotation
-    // boundaries instead of restarting from a fixed seed.
-    if (snapped.length > 0) this.primeTail = snapped;
-    return snapped;
+    // Stash the bar as prime tail for the next progression's generation.
+    if (clamped.length > 0) this.primeTail = clamped;
+    return clamped;
   }
 }
