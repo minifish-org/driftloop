@@ -2,8 +2,6 @@
 // <script> tags in index.html). Exposes a small, ESM-friendly facade so the
 // rest of the codebase doesn't have to know about the global JSSynth object.
 
-import { VinylTexture } from './texture.js';
-
 // GeneralUser-GS is hosted upstream by its maintainer (mrbumpy409). The
 // raw GitHub URL sets Access-Control-Allow-Origin: * so the browser can
 // fetch it cross-origin from wherever this app is deployed. We fetch from
@@ -57,7 +55,6 @@ export class Synth {
     this.gain = null;
     this.convolver = null;
     this.wetGain = null;
-    this.vinyl = null;
     this.ready = false;
   }
 
@@ -99,10 +96,6 @@ export class Synth {
     this.wetGain.connect(this.audioCtx.destination);
 
     this.gain.connect(this.audioCtx.destination);
-
-    // Vinyl texture layer (hiss + crackle) — parked here and toggled by
-    // setVinyl(true) when the active genre is lofi.
-    this.vinyl = new VinylTexture(this.audioCtx, this.audioCtx.destination);
 
     onProgress('Fetching SoundFont…');
     const res = await fetch(soundfontUrl);
@@ -147,11 +140,6 @@ export class Synth {
 
   noteOff(channel, note) {
     this.synth.midiNoteOff(channel, note);
-  }
-
-  // Fade the vinyl texture bed in or out. No-op until init() has run.
-  setVinyl(on) {
-    if (this.vinyl) this.vinyl.setActive(on);
   }
 
   // Silence every voice on every channel. Used by the scheduler on Stop.
