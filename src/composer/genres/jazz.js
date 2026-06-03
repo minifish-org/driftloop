@@ -6,6 +6,7 @@
 import { buildChord, intoRange, chordScale, buildChordContext } from '../theory.js';
 import { pianoVoicing } from '../voicing.js';
 import { ProgressionCursor } from '../progression.js';
+import { SectionPlanner } from '../section.js';
 
 const PROGRESSIONS = [
   ['Dm7',   'G7',    'Cmaj7', 'Cmaj7'],
@@ -99,10 +100,19 @@ export class JazzComposer {
     this.breakdownBar = -1;
     this.breakdownVoice = null;
     this._breakdownCycleId = -1;
+    this.section = new SectionPlanner({
+      template: [
+        { type: 'verse',  bars: 4 },
+        { type: 'chorus', bars: 4 },
+        { type: 'verse',  bars: 4 },
+        { type: 'chorus', bars: 4 },
+      ],
+    });
     this.cursor = new ProgressionCursor({
       progressions: PROGRESSIONS,
       cyclesMin: 2,
       cyclesMax: 3,
+      rotateChance: 0, // SectionPlanner controls rotation
       onRotate: (parsed) => {
         this._breakdownCycleId = -1;
         if (this.lead) this.lead.startProgression?.(parsed, this.bpm);
@@ -143,6 +153,9 @@ export class JazzComposer {
         this.breakdownVoice = null;
       }
     }
+
+    // SectionPlanner only gates the lead in/out — velocity stays flat.
+    const d = this.section.current().density;
 
     const chord = this.cursor.current();
     const nextChord = this.cursor.next();
@@ -190,8 +203,8 @@ export class JazzComposer {
     // Drums
     if (!dropDrums) events.push(...swingDrumEvents());
 
-    // Lead (optional)
-    if (this.lead) {
+    // Lead (optional) — only on dense (chorus) sections.
+    if (this.lead && d >= 0.7) {
       // Vibraphone's broader sweet spot — it reaches lower than the
       // lofi range thanks to its sustained mallet attack, and still
       // sings nicely up to A5.
@@ -210,6 +223,7 @@ export class JazzComposer {
     }
 
     this.cursor.advance();
+    if (this.section.advance()) this.cursor.rotate();
     return { bpm: this.bpm, beats: 4, events };
   }
 }

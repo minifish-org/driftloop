@@ -12,6 +12,7 @@
 
 import { buildChord, intoRange } from '../theory.js';
 import { ProgressionCursor } from '../progression.js';
+import { SectionPlanner } from '../section.js';
 
 // Progressions are bare triads — quality is implied (no 7th extensions,
 // keeping it Common-Practice).
@@ -74,10 +75,19 @@ export class ClassicalComposer {
   constructor() {
     this.bpm = 96;
     this.arpPattern = null;
+    this.section = new SectionPlanner({
+      template: [
+        { type: 'verse',  bars: 4 },
+        { type: 'chorus', bars: 4 },
+        { type: 'verse',  bars: 4 },
+        { type: 'chorus', bars: 4 },
+      ],
+    });
     this.cursor = new ProgressionCursor({
       progressions: PROGRESSIONS,
       cyclesMin: 1,
       cyclesMax: 2,
+      rotateChance: 0, // SectionPlanner controls rotation
       onRotate: () => {
         this.arpPattern = pickRandom(ARP_PATTERNS);
       },
@@ -102,10 +112,14 @@ export class ClassicalComposer {
 
   nextBar(_barIndex) {
     if (!this.cursor.parsed) this.restart();
+
+    // SectionPlanner only gates the harp in/out — velocity stays flat.
+    const d = this.section.current().density;
+
     const chord = this.cursor.current();
     const events = [];
 
-    // Piano arpeggio: 8 eighth-notes per bar (beat units 0.0, 0.5, 1.0, …, 3.5)
+    // Music-box arpeggio: 8 eighth-notes per bar (beat units 0.0, 0.5, …, 3.5)
     const notes = arpeggioBar(chord, this.arpPattern);
     for (let i = 0; i < 8; i++) {
       events.push({
@@ -117,18 +131,23 @@ export class ClassicalComposer {
       });
     }
 
-    // Pad: sustained triad for the full bar (4 beats), very soft.
-    for (const note of padBar(chord)) {
-      events.push({
-        channel: CH_PAD,
-        note,
-        velocity: 48,
-        time: 0,
-        duration: 3.9,
-      });
+    // Harp pad: sustained triad for the full bar. Skipped on sparse
+    // (verse) sections so verse is "music box alone", chorus is "music
+    // box + harp" — the only arrangement contrast across sections.
+    if (d >= 0.7) {
+      for (const note of padBar(chord)) {
+        events.push({
+          channel: CH_PAD,
+          note,
+          velocity: 48,
+          time: 0,
+          duration: 3.9,
+        });
+      }
     }
 
     this.cursor.advance();
+    if (this.section.advance()) this.cursor.rotate();
     return { bpm: this.bpm, beats: 4, events };
   }
 }

@@ -7,7 +7,7 @@
 // handler — they're large and the user may never opt into RNN, so it's
 // not worth precaching them.
 
-const CACHE = 'driftloop-v19';
+const CACHE = 'driftloop-v21';
 
 const SHELL = [
   './',
@@ -33,6 +33,7 @@ const SHELL = [
   './src/composer/lead/index.js',
   './src/composer/lead/rnn.js',
   './src/composer/progression.js',
+  './src/composer/section.js',
   './version.js',
 ];
 

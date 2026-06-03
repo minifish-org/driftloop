@@ -13,6 +13,7 @@ import { buildChordContext } from '../theory.js';
 import { pianoVoicing, bassRoot, bassFifth } from '../voicing.js';
 import { LOFI_PATTERNS, LOFI_FILLS, drumEvents } from '../rhythm.js';
 import { ProgressionCursor } from '../progression.js';
+import { SectionPlanner } from '../section.js';
 
 const PROGRESSIONS = [
   ['Cmaj7',  'Am7',   'Dm7',   'G7'   ], // I  vi  ii V
@@ -63,10 +64,21 @@ export class LofiComposer {
     this.breakdownBar = -1;
     this.breakdownVoice = null;
     this._breakdownCycleId = -1;
+    // SectionPlanner — alternates verse/chorus density across a 16-bar
+    // "song" so the arrangement has dynamic contrast.
+    this.section = new SectionPlanner({
+      template: [
+        { type: 'verse',  bars: 4 },
+        { type: 'chorus', bars: 4 },
+        { type: 'verse',  bars: 4 },
+        { type: 'chorus', bars: 4 },
+      ],
+    });
     this.cursor = new ProgressionCursor({
       progressions: PROGRESSIONS,
       cyclesMin: 2,
       cyclesMax: 3,
+      rotateChance: 0, // SectionPlanner controls when to rotate
       onRotate: (parsed) => {
         this.pattern = pickRandom(LOFI_PATTERNS);
         this._breakdownCycleId = -1; // force re-pick next bar
@@ -114,6 +126,12 @@ export class LofiComposer {
         this.breakdownVoice = null;
       }
     }
+
+    // SectionPlanner only gates the lead in/out — velocity stays flat
+    // across sections. Earlier versions also scaled velocity by density,
+    // which produced an audible "loud-quiet-loud" pulse that read as
+    // distracting rather than musical for background listening.
+    const d = this.section.current().density;
 
     const chord = this.cursor.current();
     const nextChord = this.cursor.next();
@@ -186,7 +204,9 @@ export class LofiComposer {
     }
 
     // --- lead (optional) ---
-    if (this.lead) {
+    // Only sound the lead on dense (chorus) sections. Verse stays silent
+    // on the lead channel — that's the entire structural contrast now.
+    if (this.lead && d >= 0.7) {
       // Vibraphone's bright/clear sweet spot: C4..A5. Going above A5 the
       // bars start to chime more than they sing.
       const ctx = buildChordContext(chord);
@@ -204,6 +224,10 @@ export class LofiComposer {
     }
 
     this.cursor.advance();
+    if (this.section.advance()) {
+      // Full song template complete — rotate to a fresh progression / key.
+      this.cursor.rotate();
+    }
     return { bpm: this.bpm, beats: 4, events };
   }
 }
