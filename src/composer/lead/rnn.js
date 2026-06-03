@@ -6,9 +6,14 @@
 // it by bar. Per bar we snap each pitch to that bar's chord scale — the
 // grammar guard called out by CLAUDE.md.
 
-import { snapToChordOrScale, buildChord } from '../theory.js';
+import { snapToChordOrScale } from '../theory.js';
 
 const MAGENTA_URL = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1';
+// SRI hash for the URL above. Generated with:
+//   curl -sSL <url> | openssl dgst -sha384 -binary | openssl base64 -A
+// If the version is bumped, this hash must be regenerated or the browser
+// will refuse to execute the script.
+const MAGENTA_INTEGRITY = 'sha384-eNedu+HVczAMF3JaSAb+Tk6zZnsSD+8h9dpG/RG2rtPqTR/LGUpGG0dEzf2y7F5e';
 const CHECKPOINT  = 'https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/basic_rnn';
 
 let magentaLoaded = null;
@@ -17,8 +22,10 @@ function loadMagenta() {
   magentaLoaded = new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = MAGENTA_URL;
+    s.integrity = MAGENTA_INTEGRITY;
+    s.crossOrigin = 'anonymous'; // required for SRI on cross-origin scripts
     s.onload = () => resolve(globalThis.mm);
-    s.onerror = () => reject(new Error(`Failed to load ${MAGENTA_URL}`));
+    s.onerror = () => reject(new Error(`Failed to load ${MAGENTA_URL} (integrity check or network)`));
     document.head.appendChild(s);
   });
   return magentaLoaded;
@@ -104,13 +111,15 @@ export class RnnLead {
     // with the snapped/clamped pitch the listener actually hears instead.
   }
 
-  barNotes(chord, scalePcs, barIdx) {
+  // ctx: { chord, scale, chordTones } — built by the composer via
+  // buildChordContext(). Lets the lead apply its grammar guard (chord
+  // tone preferred, scale fallback) without re-deriving theory each bar.
+  barNotes(ctx, barIdx) {
     if (!this.cache || barIdx >= this.cache.length) return [];
     const bar = this.cache[barIdx];
     const [lo, hi] = this.range;
-    const chordPcs = buildChord(0, chord.quality).map(i => (chord.rootPc + i) % 12);
     const snapped = bar.map(n => {
-      let p = snapToChordOrScale(n.pitch, chordPcs, scalePcs);
+      let p = snapToChordOrScale(n.pitch, ctx.chordTones, ctx.scale);
       while (p < lo) p += 12;
       while (p > hi) p -= 12;
       return { ...n, pitch: p };

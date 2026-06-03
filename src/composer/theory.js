@@ -63,6 +63,17 @@ export function parseChord(symbol) {
   return { rootPc, quality: q };
 }
 
+// Build the "bar context" a lead provider needs to make in-key decisions:
+// the chord itself, its diatonic scale, and its chord-tone pitch classes.
+// Computed once per bar by the composer and handed to lead.barNotes().
+export function buildChordContext(chord) {
+  return {
+    chord,
+    scale: chordScale(chord),
+    chordTones: CHORDS[chord.quality].map(i => ((chord.rootPc + i) % 12 + 12) % 12),
+  };
+}
+
 // Transpose a chord by `semitones` (positive = up). Pure: returns a new
 // chord object. Used by composers when modulating between progression cycles.
 export function transposeChord(chord, semitones) {

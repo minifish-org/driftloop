@@ -9,7 +9,7 @@
 // cycle; the last bar of the final cycle gets a 40% chance of a fill. Slight
 // per-bar humanisation keeps things from feeling locked.
 
-import { chordScale } from '../theory.js';
+import { buildChordContext } from '../theory.js';
 import { pianoVoicing, bassRoot, bassFifth } from '../voicing.js';
 import { LOFI_PATTERNS, LOFI_FILLS, drumEvents } from '../rhythm.js';
 import { ProgressionCursor } from '../progression.js';
@@ -64,22 +64,26 @@ export class LofiComposer {
     }
   }
 
-  reset() {
+  // Pure declaration of which channels this composer drives. Scheduler
+  // sends the program_change MIDI messages.
+  getSetup() {
+    return [
+      { channel: CH_PIANO, program: PROG_PIANO },
+      { channel: CH_BASS,  program: PROG_BASS  },
+      { channel: CH_LEAD,  program: PROG_LEAD  },
+      // CH_DRUM (9) is GM percussion — no program change needed
+    ];
+  }
+
+  // Re-seed: randomize BPM, rotate to a fresh progression. Side effects only.
+  restart() {
     // 70–84 bpm — slow enough to feel lofi, fast enough to not drag.
     this.bpm = 70 + Math.floor(Math.random() * 15);
     this.cursor.rotate();
-    return {
-      setup: [
-        { channel: CH_PIANO, program: PROG_PIANO },
-        { channel: CH_BASS,  program: PROG_BASS  },
-        { channel: CH_LEAD,  program: PROG_LEAD  },
-        // CH_DRUM (9) is GM percussion — no program change needed
-      ],
-    };
   }
 
   nextBar(_barIndex) {
-    if (!this.cursor.parsed) this.reset();
+    if (!this.cursor.parsed) this.restart();
 
     const chord = this.cursor.current();
     const nextChord = this.cursor.next();
@@ -143,8 +147,8 @@ export class LofiComposer {
 
     // --- lead (optional) ---
     if (this.lead) {
-      const scalePcs = chordScale(chord);
-      const leadNotes = this.lead.barNotes(chord, scalePcs, this.cursor.barInProg);
+      const ctx = buildChordContext(chord);
+      const leadNotes = this.lead.barNotes(ctx, this.cursor.barInProg);
       for (const n of leadNotes) {
         events.push({
           channel: CH_LEAD,

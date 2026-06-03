@@ -45,10 +45,18 @@ const initial = readUrlState();
 const synth = new Synth();
 let activeGenre = initial.genre;
 let leadModeIdx = initial.leadIdx;
-let currentLead = null;     // active lead provider, shared across composers
+// Build the initial lead provider from URL state so a `?lead=rnn` URL
+// actually wires the lead on first Play (rather than just showing the
+// label until the user clicks the Lead button).
+let currentLead = makeLead(LEAD_MODES[leadModeIdx], { onStatus: setStatusSafe });
 let composer  = makeComposer(activeGenre);
 const scheduler = new Scheduler(synth, composer);
 let state = 'idle'; // 'idle' | 'loading' | 'playing' | 'stopped'
+
+// setStatus is defined below, but makeLead may want to report progress
+// during module init. This trampoline defers to the real one once it
+// exists, and silently drops calls in the brief gap before that.
+function setStatusSafe(line) { if (typeof setStatus === 'function') setStatus(line); }
 
 function setStatus(line) { if (status) status.textContent = line; }
 

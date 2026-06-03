@@ -3,7 +3,7 @@
 // pattern with hat on 2 & 4. The unmistakable signals are the walking
 // bass and the swung ride.
 
-import { buildChord, intoRange, chordScale } from '../theory.js';
+import { buildChord, intoRange, chordScale, buildChordContext } from '../theory.js';
 import { ProgressionCursor } from '../progression.js';
 
 const PROGRESSIONS = [
@@ -114,20 +114,21 @@ export class JazzComposer {
     }
   }
 
-  reset() {
+  getSetup() {
+    return [
+      { channel: CH_PIANO, program: PROG_PIANO },
+      { channel: CH_BASS,  program: PROG_BASS  },
+      { channel: CH_LEAD,  program: PROG_LEAD  },
+    ];
+  }
+
+  restart() {
     this.bpm = 115 + Math.floor(Math.random() * 31); // 115–145
     this.cursor.rotate();
-    return {
-      setup: [
-        { channel: CH_PIANO, program: PROG_PIANO },
-        { channel: CH_BASS,  program: PROG_BASS  },
-        { channel: CH_LEAD,  program: PROG_LEAD  },
-      ],
-    };
   }
 
   nextBar(_barIndex) {
-    if (!this.cursor.parsed) this.reset();
+    if (!this.cursor.parsed) this.restart();
     const chord = this.cursor.current();
     const nextChord = this.cursor.next();
     const events = [];
@@ -166,8 +167,8 @@ export class JazzComposer {
 
     // Lead (optional)
     if (this.lead) {
-      const scalePcs = chordScale(chord);
-      const leadNotes = this.lead.barNotes(chord, scalePcs, this.cursor.barInProg);
+      const ctx = buildChordContext(chord);
+      const leadNotes = this.lead.barNotes(ctx, this.cursor.barInProg);
       for (const n of leadNotes) {
         events.push({
           channel: CH_LEAD,

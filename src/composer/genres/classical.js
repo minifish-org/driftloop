@@ -74,19 +74,20 @@ export class ClassicalComposer {
   // foreground line. Accept the call but ignore it.
   setLead(_provider) { /* no-op */ }
 
-  reset() {
+  getSetup() {
+    return [
+      { channel: CH_PIANO,   program: PROG_PIANO   },
+      { channel: CH_STRINGS, program: PROG_STRINGS },
+    ];
+  }
+
+  restart() {
     this.bpm = 84 + Math.floor(Math.random() * 26); // 84–109
     this.cursor.rotate();
-    return {
-      setup: [
-        { channel: CH_PIANO,   program: PROG_PIANO   },
-        { channel: CH_STRINGS, program: PROG_STRINGS },
-      ],
-    };
   }
 
   nextBar(_barIndex) {
-    if (!this.cursor.parsed) this.reset();
+    if (!this.cursor.parsed) this.restart();
     const chord = this.cursor.current();
     const events = [];
 

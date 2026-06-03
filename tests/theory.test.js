@@ -209,9 +209,10 @@ function shapeBar(bar) {
 
 function runComposer(C, bars = 8, expectedChannels = []) {
   const comp = new C();
-  const setup = comp.reset();
-  assert.ok(Array.isArray(setup.setup), 'reset() must return {setup: [...]}');
-  for (const cmd of setup.setup) {
+  comp.restart();
+  const setup = comp.getSetup();
+  assert.ok(Array.isArray(setup), 'getSetup() must return an array of {channel, program}');
+  for (const cmd of setup) {
     assert.ok(typeof cmd.channel === 'number');
     assert.ok(typeof cmd.program === 'number' && cmd.program >= 0 && cmd.program < 128);
   }
@@ -244,7 +245,7 @@ test('ClassicalComposer: 8 bars produce piano/strings events', () => {
 
 test('LofiComposer: bars contain at least the 4-beat drum pattern', () => {
   const comp = new LofiComposer();
-  comp.reset();
+  comp.restart();
   const bar = comp.nextBar(0);
   const drums = bar.events.filter(e => e.channel === 9);
   // boom-bap base pattern has at least a few hits per bar

@@ -54,22 +54,23 @@ export class AmbientComposer {
   // Accept and ignore the setting so the UI can drive a single API.
   setLead(_provider) { /* no-op */ }
 
-  reset() {
+  getSetup() {
+    return [
+      { channel: CH_PAD_LOW,  program: PROG_PAD_LOW  },
+      { channel: CH_PAD_HIGH, program: PROG_PAD_HIGH },
+      { channel: CH_CHIME,    program: PROG_CHIME    },
+    ];
+  }
+
+  restart() {
     // 50–68 bpm. Pace barely matters since chords last 2 bars, but lower
     // bpm gives the scheduler more time per bar.
     this.bpm = 50 + Math.floor(Math.random() * 19);
     this.cursor.rotate();
-    return {
-      setup: [
-        { channel: CH_PAD_LOW,  program: PROG_PAD_LOW  },
-        { channel: CH_PAD_HIGH, program: PROG_PAD_HIGH },
-        { channel: CH_CHIME,    program: PROG_CHIME    },
-      ],
-    };
   }
 
   nextBar(_barIndex) {
-    if (!this.cursor.parsed) this.reset();
+    if (!this.cursor.parsed) this.restart();
     const chord = this.cursor.current();
     const events = [];
 

@@ -35,13 +35,14 @@ export class Scheduler {
     this.pendingAction = { type: 'reset' };
     if (!this.running) {
       // not playing — apply immediately
-      this._applySetup(this.composer.reset());
+      this._restartComposer();
       this.pendingAction = null;
     }
   }
 
-  _applySetup(setup) {
-    for (const cmd of setup.setup || []) {
+  _restartComposer() {
+    this.composer.restart();
+    for (const cmd of this.composer.getSetup()) {
       this.synth.programChange(cmd.channel, cmd.program);
     }
   }
@@ -51,7 +52,7 @@ export class Scheduler {
     await this.synth.resume();
 
     // Apply program changes / channel setup once per Start.
-    this._applySetup(this.composer.reset());
+    this._restartComposer();
 
     this.running = true;
     this.barIndex = 0;
@@ -95,12 +96,8 @@ export class Scheduler {
       if (this.pendingAction) {
         const action = this.pendingAction;
         this.pendingAction = null;
-        if (action.type === 'swap') {
-          this.composer = action.composer;
-          this._applySetup(this.composer.reset());
-        } else if (action.type === 'reset') {
-          this._applySetup(this.composer.reset());
-        }
+        if (action.type === 'swap') this.composer = action.composer;
+        this._restartComposer();
       }
 
       const bar = this.composer.nextBar(this.barIndex);
