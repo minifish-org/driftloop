@@ -14,6 +14,7 @@ import { pianoVoicing, bassRoot, bassFifth } from '../voicing.js';
 import { LOFI_PATTERNS, LOFI_FILLS, drumEvents } from '../rhythm.js';
 import { ProgressionCursor } from '../progression.js';
 import { SectionPlanner } from '../section.js';
+import { colorizeChord } from '../theory.js';
 
 const PROGRESSIONS = [
   ['Cmaj7',  'Am7',   'Dm7',   'G7'   ], // I  vi  ii V
@@ -32,6 +33,23 @@ const PROGRESSIONS = [
   ['Cmaj7',  'A7',    'Dm7',   'G7'   ], // I V/ii ii V (secondary dominant)
   ['Cmaj7',  'Am7',   'Fmaj7', 'G7'   ], // I vi IV V (50s pop)
   ['Em7',    'Fmaj7', 'Cmaj7', 'G7'   ], // iii IV I V
+  // Second 16 — same conservative diatonic / mild-substitution vocabulary
+  ['Cmaj7',  'G7',    'Am7',   'Fmaj7'], // I  V  vi IV (pop cycle)
+  ['Am7',    'G7',    'Fmaj7', 'G7'   ], // vi V IV V (Andalusian-ish)
+  ['Dm7',    'Db7',   'Cmaj7', 'Cmaj7'], // ii bII V→I (tritone sub of V)
+  ['Cmaj7',  'Am7',   'Em7',   'G7'   ], // I  vi iii V
+  ['Fmaj7',  'G7',    'Em7',   'Am7'  ], // IV V iii vi
+  ['Am7',    'Em7',   'Fmaj7', 'G7'   ], // vi iii IV V
+  ['Dm7',    'G7',    'Em7',   'Am7'  ], // ii V iii vi
+  ['Cmaj7',  'Am7',   'Fmaj7', 'Dm7'  ], // I  vi IV ii
+  ['Em7',    'A7',    'Dm7',   'G7'   ], // iii V/ii ii V
+  ['Dm7',    'Em7',   'Am7',   'G7'   ], // ii iii vi V
+  ['Cmaj7',  'C7',    'Fmaj7', 'Fm7'  ], // I V/IV IV iv (borrowed iv)
+  ['Am7',    'D7',    'G7',    'Cmaj7'], // vi V/V V I (extended dominant chain)
+  ['Cmaj7',  'Fm7',   'Cmaj7', 'G7'   ], // I iv I V (modal borrow)
+  ['Am7',    'G7',    'Cmaj7', 'Fmaj7'], // vi V I IV
+  ['Fmaj7',  'Cmaj7', 'Dm7',   'G7'   ], // IV I ii V (turnaround start)
+  ['Cmaj7',  'Em7',   'Am7',   'Dm7'  ], // I iii vi ii (cycle of 4ths down)
 ];
 
 const CH_PIANO = 0;
@@ -79,7 +97,12 @@ export class LofiComposer {
       cyclesMin: 2,
       cyclesMax: 3,
       rotateChance: 0, // SectionPlanner controls when to rotate
-      onRotate: (parsed) => {
+      colorize: colorizeChord,
+      // onCycleStart fires every cycle wrap — rotation OR same-progression
+      // loop — so the drum pattern re-picks and the lead regenerates every
+      // 4-bar cycle. Repeat-perception goes from "same drum for 8-12 bars"
+      // down to "same drum for 4 bars".
+      onCycleStart: (parsed) => {
         this.pattern = pickRandom(LOFI_PATTERNS);
         this._breakdownCycleId = -1; // force re-pick next bar
         if (this.lead) this.lead.startProgression?.(parsed, this.bpm);

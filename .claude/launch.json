@@ -4,8 +4,8 @@
     {
       "name": "driftloop",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8767"],
-      "port": 8767,
+      "runtimeArgs": ["-m", "http.server", "8768"],
+      "port": 8768,
       "autoPort": false
     }
   ]

@@ -3,7 +3,7 @@
 // pattern with hat on 2 & 4. The unmistakable signals are the walking
 // bass and the swung ride.
 
-import { buildChord, intoRange, chordScale, buildChordContext } from '../theory.js';
+import { buildChord, intoRange, chordScale, buildChordContext, colorizeChord } from '../theory.js';
 import { pianoVoicing } from '../voicing.js';
 import { ProgressionCursor } from '../progression.js';
 import { SectionPlanner } from '../section.js';
@@ -23,6 +23,21 @@ const PROGRESSIONS = [
   ['Fmaj7', 'Dm7',   'G7',    'Cmaj7'],   // IV-ii-V-I
   ['Bm7b5', 'E7',    'Am7',   'D7'    ],  // minor ii-V then secondary
   ['Cmaj7', 'F7',    'Bbmaj7','A7'    ],  // circle-of-4ths down
+  // Second 14 — more substitutions, chains, backdoors
+  ['Dm7',   'G7',    'Em7',   'A7'   ],   // ii-V to vi (extended turnaround)
+  ['Fm7',   'Bb7',   'Cmaj7', 'Cmaj7'],   // backdoor ii-V (iv-bVII-I)
+  ['Cmaj7', 'F7',    'Cmaj7', 'G7'   ],   // I IV I V (major-key blues feel)
+  ['Cmaj7', 'Eb7',   'Abmaj7','Db7'   ],  // Coltrane changes, simplified
+  ['Cm7',   'F7',    'Bbmaj7','Bbmaj7'],  // i-IV-bVII (minor blues movement)
+  ['Cmaj7', 'Am7',   'Dm7',   'G7'   ],   // I vi ii V (basic turnaround)
+  ['Dm7',   'G7',    'Cmaj7', 'Fmaj7'],   // ii V I IV (turnaround → IV)
+  ['Am7',   'D7',    'Dm7',   'G7'   ],   // vi V/V ii V (II7 as approach)
+  ['Cmaj7', 'F#m7b5','B7',    'Em7'  ],   // chromatic descending mediant
+  ['Cmaj7', 'F7',    'Bbmaj7','Eb7'  ],   // I IV down a step (cycle)
+  ['Cmaj7', 'Bm7b5', 'E7',    'Am7'  ],   // I vii° V/vi vi
+  ['Cmaj7', 'Cmaj7', 'F7',    'F7'   ],   // long pads (one chord per 2 bars)
+  ['Cmaj7', 'D7',    'Dm7',   'G7'   ],   // I V/V ii V (Lydian II)
+  ['Gm7',   'C7',    'Fmaj7', 'Fmaj7'],   // ii-V into IV (longer dwell)
 ];
 
 const CH_PIANO = 0;
@@ -113,7 +128,8 @@ export class JazzComposer {
       cyclesMin: 2,
       cyclesMax: 3,
       rotateChance: 0, // SectionPlanner controls rotation
-      onRotate: (parsed) => {
+      colorize: colorizeChord,
+      onCycleStart: (parsed) => {
         this._breakdownCycleId = -1;
         if (this.lead) this.lead.startProgression?.(parsed, this.bpm);
       },

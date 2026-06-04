@@ -5,8 +5,12 @@
 //
 // The cursor doesn't know about chords, voicings, or rhythm. Composers
 // stay in charge of how the chord at any cursor position maps to MIDI
-// events. Callbacks let a composer add genre-specific side effects on
-// rotation (e.g. pick a new drum pattern, notify the lead provider).
+// events. A single callback (onCycleStart) fires every time the cursor
+// resets to bar 0 — whether that was a rotation (new progression + new
+// key) or just the same progression looping for another cycle. This
+// lets composers re-pick a drum pattern and regenerate a fresh lead
+// every cycle rather than every rotation; same progression listened
+// twice in a row no longer feels identical.
 
 import { parseChord, transposeChord } from './theory.js';
 
@@ -21,14 +25,20 @@ export class ProgressionCursor {
     cyclesMax = 3,          // max cycles before rotation MUST happen
     rotateChance = 0.7,     // P(rotate to a new progression) at cycle end
     barsPerChord = 1,       // ambient uses 2 — chord changes only every Nth bar
-    onRotate = null,        // (parsed) => void, fires after a rotate()
+    colorize = null,        // optional (chord) => chord, applied per-chord
+                            // after parsing. Lets composers nudge a Cmaj7
+                            // into a Cmaj9 randomly so the same progression
+                            // sounds slightly different each cycle.
+    onCycleStart = null,    // (parsed) => void, fires on every cycle boundary
+                            // (rotation OR same-progression wrap)
   }) {
     this.progressions = progressions;
     this.cyclesMin = cyclesMin;
     this.cyclesMax = cyclesMax;
     this.rotateChance = rotateChance;
     this.barsPerChord = barsPerChord;
-    this.onRotate = onRotate;
+    this.colorize = colorize;
+    this.onCycleStart = onCycleStart;
     this.parsed = null;
     this.barInProg = 0;
     this.cyclesDone = 0;
@@ -39,11 +49,32 @@ export class ProgressionCursor {
   rotate() {
     const symbols = this.progressions[Math.floor(Math.random() * this.progressions.length)];
     const transpose = Math.floor(Math.random() * 12);
-    this.parsed = symbols.map(s => transposeChord(parseChord(s), transpose));
+    let parsed = symbols.map(s => transposeChord(parseChord(s), transpose));
+    if (this.colorize) parsed = parsed.map(this.colorize);
+    this.parsed = parsed;
     this.barInProg = 0;
     this.cyclesDone = 0;
     this.cyclesTarget = rint(this.cyclesMin, this.cyclesMax);
-    if (this.onRotate) this.onRotate(this.parsed);
+    if (this.onCycleStart) this.onCycleStart(this.parsed);
+  }
+
+  // Re-colorize the current progression in place — used to refresh the
+  // chord palette on a non-rotation cycle wrap so the second pass
+  // through the same progression has different extensions.
+  _recolorize() {
+    if (!this.colorize || !this.parsed) return;
+    // Re-apply colorize but using the original quality as the "neutral"
+    // form. We don't have the originals cached; instead, simulate by
+    // walking parsed and "decolouring" any maj9/min9/dom9 back to their
+    // 7-version before recolourising. That way colorize is idempotent
+    // across cycles.
+    const decolor = { maj9: 'maj7', min9: 'min7', dom9: 'dom7' };
+    this.parsed = this.parsed.map(c => {
+      const base = decolor[c.quality]
+        ? { rootPc: c.rootPc, quality: decolor[c.quality] }
+        : c;
+      return this.colorize(base);
+    });
   }
 
   get barsPerCycle() { return this.parsed.length * this.barsPerChord; }
@@ -70,18 +101,24 @@ export class ProgressionCursor {
 
   // Advance one bar. Triggers a rotation when we've finished cyclesTarget
   // full cycles (with rotateChance probability; otherwise just stays on
-  // the same progression for another stretch).
+  // the same progression for another stretch). Every cycle boundary
+  // — rotation or wrap — fires onCycleStart so composers can re-pick
+  // their drum pattern and regenerate the lead.
   advance() {
     this.barInProg += 1;
     if (this.barInProg < this.barsPerCycle) return;
     this.barInProg = 0;
     this.cyclesDone += 1;
-    if (this.cyclesDone < this.cyclesTarget) return;
-    if (Math.random() < this.rotateChance) {
-      this.rotate();
-    } else {
+    if (this.cyclesDone >= this.cyclesTarget) {
+      if (Math.random() < this.rotateChance) {
+        this.rotate(); // fires onCycleStart inside
+        return;
+      }
       this.cyclesDone = 0;
       this.cyclesTarget = rint(this.cyclesMin, this.cyclesMax);
     }
+    // Non-rotation cycle wrap — same progression, fresh colorize pass.
+    this._recolorize();
+    if (this.onCycleStart) this.onCycleStart(this.parsed);
   }
 }

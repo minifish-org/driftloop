@@ -74,6 +74,22 @@ export function buildChordContext(chord) {
   };
 }
 
+// Randomly add a 9th to plain 7th chords. Composers call this on each
+// parsed chord to give the same progression a slightly different colour
+// every time it cycles — Cmaj7 might come back as Cmaj9, Dm7 as Dm9, G7
+// as G9. Anything already extended (maj9, dim7, etc) passes through.
+//
+// Probabilities are low enough that the harmonic outline of the
+// progression is preserved — at most one or two chords in a 4-bar
+// phrase will be coloured on any given cycle.
+export function colorizeChord(chord) {
+  const q = chord.quality;
+  if (q === 'maj7' && Math.random() < 0.22) return { rootPc: chord.rootPc, quality: 'maj9' };
+  if (q === 'min7' && Math.random() < 0.18) return { rootPc: chord.rootPc, quality: 'min9' };
+  if (q === 'dom7' && Math.random() < 0.18) return { rootPc: chord.rootPc, quality: 'dom9' };
+  return chord;
+}
+
 // Transpose a chord by `semitones` (positive = up). Pure: returns a new
 // chord object. Used by composers when modulating between progression cycles.
 export function transposeChord(chord, semitones) {

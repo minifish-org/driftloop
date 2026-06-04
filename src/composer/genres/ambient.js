@@ -17,6 +17,15 @@ const PROGRESSIONS = [
   ['Am9',    'Em9'                       ],      // minor drone pair
   ['Fmaj7',  'Bbmaj7'                    ],      // perfect-4th cycle
   ['Cmaj9',  'Ebmaj9','Gmaj9' ],                 // chromatic mediants
+  // Second 8 — more modal / extended drones
+  ['Bbmaj9', 'Fmaj9'                     ],      // bVII-IV drone (mixolydian)
+  ['Em9',    'Dm9'                       ],      // dorian descent
+  ['Cmaj9',  'Bm7b5', 'Em9'              ],      // tense-resolve in C
+  ['Dmaj9',  'Amaj9', 'Emaj9',  'Bmaj9'],        // bright cycle up (4-chord)
+  ['Fmaj9',  'Cmaj9', 'Dm9'              ],      // IV-I-ii (suspended)
+  ['Cmaj9',  'Gmaj9', 'Dmaj9'            ],      // I-V-II (modulating up)
+  ['Em9',    'Cmaj9', 'Am9'              ],      // iii-I-vi
+  ['Fmaj9',  'Gmaj9'                     ],      // whole-step shift
 ];
 
 const CH_PAD_LOW  = 0;

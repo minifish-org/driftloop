@@ -29,6 +29,15 @@ const PROGRESSIONS = [
   ['C',  'F',  'G',  'C',  'F',  'G',  'Am', 'F' ], // hymn-like plagal feel
   ['Am', 'E',  'F',  'Dm', 'Bb', 'Am', 'E',  'Am'], // harmonic minor outline
   ['G',  'Em', 'C',  'D',  'G',  'Em', 'Am', 'D' ], // G major folk
+  // Second 8 — more period-style movement
+  ['C',  'F',  'Dm', 'G',  'C',  'F',  'G',  'C' ], // hymn cadence variant
+  ['F',  'Dm', 'Bb', 'C',  'F',  'Dm', 'Gm', 'C' ], // Mozart-ish
+  ['G',  'C',  'D',  'G',  'Em', 'C',  'D',  'G' ], // folk waltz outline
+  ['Am', 'Dm', 'G',  'C',  'F',  'Bdim','E',  'Am'], // Bach circle-of-5ths minor
+  ['C',  'Em', 'Am', 'F',  'C',  'G',  'F',  'C' ], // Beethoven-simple
+  ['Em', 'D',  'C',  'B',  'Em', 'Am', 'B',  'Em'], // descending E minor
+  ['F',  'Bb', 'C',  'Am', 'Dm', 'Gm', 'C',  'F' ], // baroque sequence in F
+  ['G',  'Bm', 'Em', 'D',  'C',  'D',  'G',  'D' ], // hymn-ish G major
 ];
 
 const CH_PIANO   = 0;
@@ -88,7 +97,10 @@ export class ClassicalComposer {
       cyclesMin: 1,
       cyclesMax: 2,
       rotateChance: 0, // SectionPlanner controls rotation
-      onRotate: () => {
+      // Classical uses bare triads — colorize is a no-op for these
+      // qualities. Skipping the option keeps the Baroque-period harmony
+      // unchanged.
+      onCycleStart: () => {
         this.arpPattern = pickRandom(ARP_PATTERNS);
       },
     });
