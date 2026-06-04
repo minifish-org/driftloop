@@ -182,30 +182,55 @@ export class JazzComposer {
     const dropBass  = isBreakdownBar && this.breakdownVoice === 'bass';
     const dropDrums = isBreakdownBar && this.breakdownVoice === 'drums';
 
-    // Piano comping: chord stabs on "and of 2" and "and of 4" (Charleston-ish).
+    // Break-pulse: every bar has a small chance of departing from the
+    // relentless walking-bass + spang-a-lang rhythm. Without this jazz
+    // would feel monotonous even though the chords change — the whole
+    // rhythmic skeleton stamps the same pattern bar after bar.
+    //   stopTime (5%):  only beat 1 fires across all voices, then silence.
+    //   dropBeat4 (8%): bass walks 3 notes, ride skips its beat-4 hit.
+    const pulseRoll = Math.random();
+    const stopTime  = pulseRoll < 0.05;
+    const dropBeat4 = !stopTime && pulseRoll < 0.13;
+
+    // Piano comping
     const voicing = pianoVoicing(chord, this.prevVoicing);
     this.prevVoicing = voicing;
     if (!dropPiano) {
-      const compTimes = Math.random() < 0.5 ? [1.667, 3.0]
-                      : Math.random() < 0.5 ? [1.0, 2.667]
-                      : [1.667, 3.667];
-      for (const t of compTimes) {
+      if (stopTime) {
+        // Single chord stab on beat 1, then silence.
         for (const note of voicing) {
           events.push({
             channel: CH_PIANO,
             note,
-            velocity: 64 + Math.floor(Math.random() * 8),
-            time: t,
-            duration: 0.7,
+            velocity: 70 + Math.floor(Math.random() * 6),
+            time: 0,
+            duration: 1.5,
           });
+        }
+      } else {
+        // Charleston-ish comping: chord stabs on "and of 2" and "and of 4".
+        const compTimes = Math.random() < 0.5 ? [1.667, 3.0]
+                        : Math.random() < 0.5 ? [1.0, 2.667]
+                        : [1.667, 3.667];
+        for (const t of compTimes) {
+          for (const note of voicing) {
+            events.push({
+              channel: CH_PIANO,
+              note,
+              velocity: 64 + Math.floor(Math.random() * 8),
+              time: t,
+              duration: 0.7,
+            });
+          }
         }
       }
     }
 
-    // Walking bass: 4 quarter notes
+    // Walking bass: 4 quarter notes normally; fewer on a break-pulse bar.
     if (!dropBass) {
       const walk = walkingBassBar(chord, nextChord);
-      for (let i = 0; i < 4; i++) {
+      const walkLen = stopTime ? 1 : (dropBeat4 ? 3 : 4);
+      for (let i = 0; i < walkLen; i++) {
         events.push({
           channel: CH_BASS,
           note: walk[i],
@@ -217,7 +242,20 @@ export class JazzComposer {
     }
 
     // Drums
-    if (!dropDrums) events.push(...swingDrumEvents());
+    if (!dropDrums) {
+      if (stopTime) {
+        // Single ride hit on beat 1 (note 51 = Ride Cymbal 1) —
+        // punctuates the silence that follows.
+        events.push({ channel: CH_DRUM, note: 51, velocity: 78, time: 0, duration: 0.1 });
+      } else {
+        const drums = swingDrumEvents();
+        // dropBeat4: lose the ride hit on beat 4 (and its swing-8th).
+        const filtered = dropBeat4
+          ? drums.filter(e => !(e.note === 51 && e.time >= 2.9))
+          : drums;
+        events.push(...filtered);
+      }
+    }
 
     // Lead (optional) — only on dense (chorus) sections.
     if (this.lead && d >= 0.7) {

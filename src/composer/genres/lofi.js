@@ -69,7 +69,39 @@ const PROG_LEAD  = 11;  // Vibraphone — mallet attack + natural sustain, sits
 // noticeably late — classic lofi shuffle, not full triplet feel.
 const LOFI_SWING = 0.09;
 
+// Piano comping templates. Picked weighted per bar so the right hand
+// doesn't stamp the same "beat 1 + beat 3" forever. Each `hit` is a
+// chord stab; `roll` arpeggiates the voicing across N beats per note
+// instead of a block stab.
+const LOFI_PIANO_PATTERNS = [
+  // Default — chord stabs on the strong beats. Still the most common
+  // shape so the genre is recognisable.
+  { name: 'standard',     hits: [{ time: 0,    vel: 78 }, { time: 2,    vel: 70 }], weight: 40 },
+  // Sparse — only the downbeat stab. Lets the bar breathe.
+  { name: 'sparse',       hits: [{ time: 0,    vel: 78 }],                          weight: 12 },
+  // Push — second stab anticipated half a beat early.
+  { name: 'anticipation', hits: [{ time: 0,    vel: 78 }, { time: 1.5,  vel: 73 }], weight: 12 },
+  // Lay-back — both stabs land just behind the beat.
+  { name: 'layback',      hits: [{ time: 0.12, vel: 78 }, { time: 2.12, vel: 70 }], weight: 10 },
+  // Off-beat — Charleston-ish, hits on 2 and 4 instead of 1 and 3.
+  { name: 'off-beat',     hits: [{ time: 1,    vel: 74 }, { time: 3,    vel: 71 }], weight:  9 },
+  // Roll-up — arpeggiate the voicing on beat 1, then a block stab on 3.
+  { name: 'roll-up',      hits: [{ time: 0,    vel: 78, roll: 0.11 }, { time: 2,    vel: 70 }], weight:  9 },
+  // Silent — piano sits out the whole bar. Bass + drums carry.
+  { name: 'silent',       hits: [],                                                weight:  8 },
+];
+
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function pickWeighted(items) {
+  const total = items.reduce((s, x) => s + x.weight, 0);
+  let r = Math.random() * total;
+  for (const x of items) {
+    r -= x.weight;
+    if (r < 0) return x;
+  }
+  return items[items.length - 1];
+}
 
 export class LofiComposer {
   constructor() {
@@ -165,19 +197,29 @@ export class LofiComposer {
     const dropBass  = isBreakdownBar && this.breakdownVoice === 'bass';
     const dropDrums = isBreakdownBar && this.breakdownVoice === 'drums';
 
-    // --- piano: two block voicings per bar, on beat 1 and beat 3 ---
+    // --- piano: pick a comping pattern this bar ---
+    // Each pattern is a list of `hits` (chord stabs at specific beats).
+    // A `roll` value spreads the voicing across that many beats per note
+    // instead of stamping the chord as a single block.
     const voicing = pianoVoicing(chord, this.prevVoicing);
     this.prevVoicing = voicing;
-    if (!dropPiano) for (const beatStart of [0, 2]) {
-      // tiny velocity dip on the &-of-3 hit so beat 1 feels heaviest
-      const vel = beatStart === 0 ? 78 : 70;
-      for (const note of voicing) {
-        events.push({
-          channel: CH_PIANO,
-          note,
-          velocity: vel + Math.floor(Math.random() * 6),
-          time: beatStart + (Math.random() * 0.02), // tiny human-shift
-          duration: 1.9, // let it ring into the next half-bar
+    if (!dropPiano) {
+      const compPattern = pickWeighted(LOFI_PIANO_PATTERNS);
+      for (const hit of compPattern.hits) {
+        const roll = hit.roll ?? 0;
+        voicing.forEach((note, i) => {
+          // roll > 0: arpeggiate voicing across `roll` beats per note.
+          // roll = 0: block stab with a tiny human-feel jitter.
+          const time = roll > 0
+            ? hit.time + i * roll
+            : hit.time + Math.random() * 0.02;
+          events.push({
+            channel: CH_PIANO,
+            note,
+            velocity: hit.vel + Math.floor(Math.random() * 6),
+            time,
+            duration: 1.9, // let it ring
+          });
         });
       }
     }
