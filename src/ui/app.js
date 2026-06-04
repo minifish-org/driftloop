@@ -107,8 +107,15 @@ async function ensureLoaded() {
 
 function statusForPlaying() {
   const m = leadMode();
-  if (!leadActive() || m === 'off') return `Playing — ${activeGenre}.`;
-  return `Playing — ${activeGenre} (with melody).`;
+  if (!leadActive() || m === 'off') return `Now broadcasting: ${activeGenre}.`;
+  return `Now broadcasting: ${activeGenre}, with melody.`;
+}
+
+// Toggle the body.playing class so the "ON AIR" badge can light up the
+// amber lamp + pulsing dot via CSS. Centralised so every state-change
+// site (play / stop / load-fail / next / genre swap) stays consistent.
+function setBodyPlaying(on) {
+  document.body.classList.toggle('playing', !!on);
 }
 
 async function doPlay() {
@@ -120,6 +127,7 @@ async function doPlay() {
   state = 'playing';
   setStatus(statusForPlaying());
   setButtons();
+  setBodyPlaying(true);
   // Wake lock is acquired only after a successful start so we never leak
   // it on a failed SoundFont fetch.
   acquireWakeLock();
@@ -128,8 +136,9 @@ async function doPlay() {
 function doStop() {
   scheduler.stop();
   state = 'stopped';
-  setStatus('Stopped.');
+  setStatus('Off air.');
   setButtons();
+  setBodyPlaying(false);
   releaseWakeLock();
 }
 
@@ -139,7 +148,7 @@ function doNext() {
     setStatus(`${statusForPlaying()} New song coming…`);
     setTimeout(() => { if (state === 'playing') setStatus(statusForPlaying()); }, 1200);
   } else {
-    setStatus(`${activeGenre} re-seeded.`);
+    setStatus(`${activeGenre} re-tuned.`);
   }
 }
 
@@ -154,10 +163,10 @@ function selectGenre(id) {
   scheduler.swapComposerAtNextBar(composer);
   writeUrlState();
   if (state === 'playing') {
-    setStatus(`Switching to ${activeGenre}…`);
+    setStatus(`Tuning into ${activeGenre}…`);
     setTimeout(() => { if (state === 'playing') setStatus(statusForPlaying()); }, 1200);
   } else {
-    setStatus(`${activeGenre} ready.`);
+    setStatus(`Tuned to ${activeGenre}.`);
   }
   setButtons();
 }
@@ -178,7 +187,7 @@ async function cycleLead() {
   if (state === 'playing') {
     setStatus(statusForPlaying());
   } else if (mode === 'rnn') {
-    setStatus('Melody model will load on play.');
+    setStatus('Melody will join on play.');
   } else {
     setStatus('Melody off.');
   }
@@ -271,5 +280,5 @@ const versionEl = document.getElementById('version');
 if (versionEl) versionEl.textContent = `build ${VERSION}`;
 
 refreshLeadBtn();
-setStatus('Pick a genre, click play. First launch downloads ~40 MB.');
+setStatus('Choose a station and press play. First broadcast downloads ~40 MB.');
 setButtons();

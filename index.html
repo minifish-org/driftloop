@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>driftloop — generative music</title>
+<title>driftloop — generative radio</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#fafafa">
-<meta name="description" content="Generative lofi / ambient / jazz / classical, synthesised live in your browser. Offline-capable.">
+<meta name="theme-color" content="#1a1612">
+<meta name="description" content="A generative radio station. Lofi, ambient, jazz, classical — composed live in your browser, never the same twice.">
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
@@ -17,117 +17,236 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="driftloop">
 <style>
+  /* Late-night radio palette: warm dark with amber lamp accent. Light
+     mode is a daytime equivalent (cream paper + deeper amber) for
+     readability outdoors; both modes share the amber as the only
+     non-neutral hue. */
   :root {
     color-scheme: light dark;
-    --fg: #1d1d1f;
-    --muted: #6b6b6b;
-    --bg: #fafafa;
-    --border: #d8d8d8;
+    --bg: #f7f1e3;
+    --surface: #fdf9ec;
+    --fg: #2a221b;
+    --muted: #806f5b;
+    --border: #d8ccb4;
+    --accent: #a8753a;
+    --accent-glow: rgba(168, 117, 58, 0.18);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --fg: #f2f2f2;
-      --muted: #9a9a9a;
-      --bg: #131313;
-      --border: #303030;
+      --bg: #1a1612;
+      --surface: #221d18;
+      --fg: #ede2cd;
+      --muted: #948775;
+      --border: #3a2f26;
+      --accent: #d4a85c;
+      --accent-glow: rgba(212, 168, 92, 0.35);
     }
   }
+
   html, body { background: var(--bg); color: var(--fg); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-    max-width: 600px;
-    margin: 48px auto;
+    max-width: 560px;
+    margin: 56px auto;
     padding: 24px;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
 
+  /* Hero */
+  .hero {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 40px;
+  }
+  .hero-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
   h1 {
+    font-family: "Iowan Old Style", "Palatino", Georgia, serif;
     font-weight: 500;
-    font-size: 32px;
+    font-style: italic;
+    font-size: 40px;
     margin: 0;
     letter-spacing: -0.01em;
   }
-  .subtitle {
+  .tagline {
     color: var(--muted);
-    font-size: 14px;
-    margin: 0 0 32px;
+    font-size: 13px;
+    font-style: italic;
+    margin: 4px 0 0;
+    letter-spacing: 0.02em;
   }
 
-  .genres {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
+  /* ON AIR badge — dim by default, amber lamp when broadcasting */
+  .on-air {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
     gap: 8px;
-    margin: 0 0 24px;
+    transition: color 0.4s;
   }
+  .on-air .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  body.playing .on-air {
+    color: var(--accent);
+  }
+  body.playing .on-air .dot {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent-glow);
+    animation: breathe 2.2s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { opacity: 1;   transform: scale(1);    }
+    50%      { opacity: 0.45; transform: scale(0.7); }
+  }
+
+  /* Genre row as a tuning band — horizontal stations with an amber
+     dot marker under the active one. */
+  .genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    margin: 0 0 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .genre {
+    background: transparent;
+    border: none;
+    padding: 4px 0;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.2s;
+  }
+  .genre:hover:not(:disabled) { color: var(--fg); }
+  .genre:disabled { opacity: 0.4; cursor: not-allowed; }
+  .genre[aria-pressed="true"] {
+    color: var(--accent);
+  }
+  .genre[aria-pressed="true"]::after {
+    content: '';
+    position: absolute;
+    bottom: -19px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 4px var(--accent-glow);
+  }
+
+  /* Transport — outlined secondary buttons, play is the amber primary. */
   .transport {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin: 0 0 24px;
+    margin: 0 0 28px;
   }
-  .transport button { flex: 1; min-width: 80px; }
-
-  button {
+  .transport button {
+    flex: 1;
+    min-width: 80px;
     font-size: 14px;
     padding: 10px 14px;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--fg);
     cursor: pointer;
-    border-radius: 6px;
+    border-radius: 4px;
     font-family: inherit;
-    transition: background 0.12s, border-color 0.12s, color 0.12s, opacity 0.12s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
   }
-  button:hover:not(:disabled) { border-color: var(--fg); }
-  button:disabled { opacity: 0.35; cursor: not-allowed; }
-  button:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
-  }
-
-  /* Filled style for the primary action and the currently-selected genre.
-     Same treatment unifies "this is what's happening" across the page. */
-  .genre[aria-pressed="true"],
-  #play {
-    background: var(--fg);
+  .transport button:hover:not(:disabled) {
     border-color: var(--fg);
-    color: var(--bg);
   }
-  /* Play stays visually primary even when disabled (during play). */
-  #play:disabled { opacity: 0.35; }
+  .transport button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  #play {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 500;
+  }
+  #play:hover:not(:disabled) {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+  #play:disabled {
+    opacity: 0.45;
+  }
 
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* Status — italic muted, "now broadcasting" voice */
   #status {
     color: var(--muted);
     font-size: 13px;
-    margin: 0 0 32px;
+    font-style: italic;
+    margin: 0 0 40px;
     min-height: 1.5em;
   }
 
+  /* Footer — station ident style */
   footer {
     color: var(--muted);
-    font-size: 12px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
     border-top: 1px solid var(--border);
     padding-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
   }
   footer a { color: inherit; }
+  footer .ident { font-style: italic; }
   .version {
-    display: inline-block;
-    margin-left: 12px;
-    opacity: 0.6;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10px;
+    opacity: 0.7;
   }
 </style>
 </head>
 <body>
 
-<h1>driftloop</h1>
-<p class="subtitle">Generative music, synthesised live in your browser.</p>
+<header class="hero">
+  <div class="hero-line">
+    <h1>driftloop</h1>
+    <span class="on-air" aria-hidden="true">
+      <span class="dot"></span>on air
+    </span>
+  </div>
+  <p class="tagline">a station that never plays the same song twice</p>
+</header>
 
-<div class="genres" id="genres">
+<nav class="genres" id="genres" aria-label="Genre">
   <button class="genre" data-genre="lofi"      aria-pressed="false">lofi</button>
   <button class="genre" data-genre="ambient"   aria-pressed="false">ambient</button>
   <button class="genre" data-genre="jazz"      aria-pressed="false">jazz</button>
   <button class="genre" data-genre="classical" aria-pressed="false">classical</button>
-</div>
+</nav>
 
 <div class="transport">
   <button id="play">play</button>
@@ -139,14 +258,12 @@
 <div id="status" role="status" aria-live="polite"></div>
 
 <footer>
-  Built with FluidSynth-WASM and MuseScore General Lite. See <a href="README.md">README</a>.
+  <span class="ident">driftloop · FluidSynth-WASM + MuseScore General Lite · <a href="README.md">README</a></span>
   <span id="version" class="version"></span>
 </footer>
 
 <!-- js-synthesizer ships as UMD globals. Order matters: the WASM loader
-     must run before the JS wrapper. Vendored locally from
-     unpkg.com/js-synthesizer@1.8.5 to avoid a CDN single-point-of-failure
-     and to make the app fully self-hosted on Cloudflare Pages. -->
+     must run before the JS wrapper. -->
 <script src="vendor/js-synthesizer/libfluidsynth.js"></script>
 <script src="vendor/js-synthesizer/js-synthesizer.js"></script>
 
