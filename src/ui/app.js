@@ -69,7 +69,9 @@ const LEAD_GENRES = new Set(['lofi', 'jazz']);
 function leadActive() { return LEAD_GENRES.has(activeGenre); }
 
 function refreshLeadBtn() {
-  leadBtn.textContent = leadActive() ? `Lead: ${leadMode()}` : 'Lead: n/a';
+  // Internal modes are 'off' / 'rnn'; user-facing copy is 'off' / 'on'.
+  const m = leadMode();
+  leadBtn.textContent = `melody: ${m === 'off' ? 'off' : 'on'}`;
 }
 
 function setButtons() {
@@ -77,10 +79,14 @@ function setButtons() {
   playBtn.disabled = loading || state === 'playing';
   stopBtn.disabled = state !== 'playing';
   nextBtn.disabled = loading;
-  leadBtn.disabled = loading || !leadActive();
+  leadBtn.disabled = loading;
+  // Ambient and classical don't use a lead voice — hide the toggle on
+  // those genres rather than greying it out.
+  leadBtn.style.display = leadActive() ? '' : 'none';
   for (const el of genreEls) {
     el.disabled = loading;
-    el.classList.toggle('active', el.dataset.genre === activeGenre);
+    const selected = el.dataset.genre === activeGenre;
+    el.setAttribute('aria-pressed', selected ? 'true' : 'false');
   }
   refreshLeadBtn();
 }
@@ -102,7 +108,7 @@ async function ensureLoaded() {
 function statusForPlaying() {
   const m = leadMode();
   if (!leadActive() || m === 'off') return `Playing — ${activeGenre}.`;
-  return `Playing — ${activeGenre} (lead: ${m}).`;
+  return `Playing — ${activeGenre} (with melody).`;
 }
 
 async function doPlay() {
@@ -122,7 +128,7 @@ async function doPlay() {
 function doStop() {
   scheduler.stop();
   state = 'stopped';
-  setStatus('Stopped. Click Play to resume.');
+  setStatus('Stopped.');
   setButtons();
   releaseWakeLock();
 }
@@ -130,10 +136,10 @@ function doStop() {
 function doNext() {
   scheduler.reseedAtNextBar();
   if (state === 'playing') {
-    setStatus(`${statusForPlaying()} (new seed at next bar)`);
+    setStatus(`${statusForPlaying()} New song coming…`);
     setTimeout(() => { if (state === 'playing') setStatus(statusForPlaying()); }, 1200);
   } else {
-    setStatus(`${activeGenre} re-seeded. Click Play.`);
+    setStatus(`${activeGenre} re-seeded.`);
   }
 }
 
@@ -148,10 +154,10 @@ function selectGenre(id) {
   scheduler.swapComposerAtNextBar(composer);
   writeUrlState();
   if (state === 'playing') {
-    setStatus(`Switching to ${activeGenre} at next bar…`);
+    setStatus(`Switching to ${activeGenre}…`);
     setTimeout(() => { if (state === 'playing') setStatus(statusForPlaying()); }, 1200);
   } else {
-    setStatus(`${activeGenre} ready. Click Play.`);
+    setStatus(`${activeGenre} ready.`);
   }
   setButtons();
 }
@@ -164,7 +170,7 @@ async function cycleLead() {
   try {
     currentLead = makeLead(mode, { onStatus: setStatus });
   } catch (e) {
-    setStatus('Lead init failed: ' + e.message);
+    setStatus('Melody failed to init: ' + e.message);
     currentLead = null;
     return;
   }
@@ -172,9 +178,9 @@ async function cycleLead() {
   if (state === 'playing') {
     setStatus(statusForPlaying());
   } else if (mode === 'rnn') {
-    setStatus('MelodyRNN will load on Play.');
+    setStatus('Melody model will load on play.');
   } else {
-    setStatus(`Lead set to ${mode}. Click Play.`);
+    setStatus('Melody off.');
   }
 }
 
@@ -203,7 +209,7 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // First controller assignment on a fresh page load is not an "update".
     if (!initialController) { initialController = navigator.serviceWorker.controller; return; }
-    setStatus('New version available — reload to apply.');
+    setStatus('New version available. Reload to apply.');
   });
 }
 
@@ -265,5 +271,5 @@ const versionEl = document.getElementById('version');
 if (versionEl) versionEl.textContent = `build ${VERSION}`;
 
 refreshLeadBtn();
-setStatus('Ready. Pick a genre and click Play (first time pulls ~40 MB SoundFont).');
+setStatus('Pick a genre, click play. First launch downloads ~40 MB.');
 setButtons();

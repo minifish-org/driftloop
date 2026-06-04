@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>driftloop — generative music</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f1318">
+<meta name="theme-color" content="#fafafa">
 <meta name="description" content="Generative lofi / ambient / jazz / classical, synthesised live in your browser. Offline-capable.">
 
 <!-- PWA -->
@@ -22,80 +22,98 @@
     --fg: #1d1d1f;
     --muted: #6b6b6b;
     --bg: #fafafa;
-    --card: #ffffff;
     --border: #d8d8d8;
-    --accent: #2a6df4;
-    --accent-fg: #ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --fg: #f2f2f2;
       --muted: #9a9a9a;
       --bg: #131313;
-      --card: #1d1d1d;
       --border: #303030;
-      --accent: #6a9bff;
-      --accent-fg: #0c1320;
     }
   }
   html, body { background: var(--bg); color: var(--fg); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     max-width: 600px;
-    margin: 64px auto;
+    margin: 48px auto;
     padding: 24px;
     line-height: 1.5;
   }
-  h1 { font-weight: 500; font-size: 24px; margin: 0 0 4px; }
-  .subtitle { color: var(--muted); margin: 0 0 32px; }
+
+  h1 {
+    font-weight: 500;
+    font-size: 32px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 32px;
+  }
+
   .genres {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin: 24px 0;
+    gap: 8px;
+    margin: 0 0 24px;
   }
-  .transport { display: flex; gap: 12px; margin: 20px 0; }
+  .transport {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 24px;
+  }
+  .transport button { flex: 1; min-width: 80px; }
+
   button {
-    font-size: 15px;
-    padding: 12px 16px;
+    font-size: 14px;
+    padding: 10px 14px;
     border: 1px solid var(--border);
-    background: var(--card);
+    background: transparent;
     color: var(--fg);
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 6px;
     font-family: inherit;
-    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    transition: background 0.12s, border-color 0.12s, color 0.12s, opacity 0.12s;
   }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .genre.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--accent-fg);
-    font-weight: 500;
+  button:hover:not(:disabled) { border-color: var(--fg); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
   }
-  #play { font-weight: 500; }
+
+  /* Filled style for the primary action and the currently-selected genre.
+     Same treatment unifies "this is what's happening" across the page. */
+  .genre[aria-pressed="true"],
+  #play {
+    background: var(--fg);
+    border-color: var(--fg);
+    color: var(--bg);
+  }
+  /* Play stays visually primary even when disabled (during play). */
+  #play:disabled { opacity: 0.35; }
+
   #status {
     color: var(--muted);
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: 13px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    margin: 0 0 32px;
     min-height: 1.5em;
   }
+
   footer {
-    margin-top: 48px;
     color: var(--muted);
     font-size: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
   }
   footer a { color: inherit; }
   .version {
     display: inline-block;
-    margin-left: 8px;
+    margin-left: 12px;
     opacity: 0.6;
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
   }
 </style>
 </head>
@@ -105,26 +123,23 @@
 <p class="subtitle">Generative music, synthesised live in your browser.</p>
 
 <div class="genres" id="genres">
-  <button class="genre" data-genre="lofi">lofi</button>
-  <button class="genre" data-genre="ambient">ambient</button>
-  <button class="genre" data-genre="jazz">jazz</button>
-  <button class="genre" data-genre="classical">classical</button>
+  <button class="genre" data-genre="lofi"      aria-pressed="false">lofi</button>
+  <button class="genre" data-genre="ambient"   aria-pressed="false">ambient</button>
+  <button class="genre" data-genre="jazz"      aria-pressed="false">jazz</button>
+  <button class="genre" data-genre="classical" aria-pressed="false">classical</button>
 </div>
 
 <div class="transport">
-  <button id="play">Play</button>
-  <button id="stop" disabled>Stop</button>
-  <button id="next">Next</button>
-  <button id="lead">Lead: off</button>
+  <button id="play">play</button>
+  <button id="stop" disabled>stop</button>
+  <button id="next">new</button>
+  <button id="lead">melody: off</button>
 </div>
 
-<div id="status">Booting…</div>
+<div id="status" role="status" aria-live="polite"></div>
 
 <footer>
-  Synthesis: js-synthesizer (FluidSynth WASM) + GeneralUser-GS SoundFont.
-  Composition: vanilla JS rules per genre — chord libraries, voicings,
-  walking bass, swing drums, arpeggios, pads. No prerecorded audio. No
-  server. See <a href="README.md">README</a>.
+  Built with FluidSynth-WASM and MuseScore General Lite. See <a href="README.md">README</a>.
   <span id="version" class="version"></span>
 </footer>
 
